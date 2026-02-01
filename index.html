@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cozy Camp 3D: Island Life</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Fredoka', sans-serif;
+        background-color: #ffffff;
+        overflow: hidden;
+        margin: 0;
+      }
+      /* UI Overlay animations */
+      @keyframes popIn {
+        0% { transform: scale(0.9); opacity: 0; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+      .animate-pop {
+        animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      @keyframes bob {
+        0%, 100% { transform: translate(-50%, -52%); }
+        50% { transform: translate(-50%, -48%); }
+      }
+      .loading-screen {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+      }
+      .tent-spinner {
+        position: relative;
+        width: 84px;
+        height: 84px;
+      }
+      .spinner-ring {
+        position: absolute;
+        inset: 0;
+        border: 2px solid rgba(244, 162, 97, 0.7);
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 1.2s linear infinite;
+      }
+      .tent-shape {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 0;
+        height: 0;
+        border-left: 26px solid transparent;
+        border-right: 26px solid transparent;
+        border-bottom: 40px solid #f4a261;
+        animation: bob 1.6s ease-in-out infinite;
+      }
+      .tent-door {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 0;
+        height: 0;
+        border-left: 8px solid transparent;
+        border-right: 8px solid transparent;
+        border-bottom: 16px solid #ffffff;
+        transform: translate(-50%, -8px);
+        opacity: 0.9;
+      }
+      /* Hide scrollbar for UI panels */
+      .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+      }
+      .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+      }
+      #root {
+        width: 100vw;
+        height: 100vh;
+        height: 100svh;
+        position: relative;
+      }
+    </style>
+
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
+    "@google/genai": "https://esm.sh/@google/genai@^1.39.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.292.0",
+    "three": "https://esm.sh/three@0.160.0",
+    "@react-three/fiber": "https://esm.sh/@react-three/fiber@8.15.14?external=react,react-dom,three",
+    "@react-three/drei": "https://esm.sh/@react-three/drei@9.99.0?external=react,react-dom,three,@react-three/fiber",
+    "uuid": "https://esm.sh/uuid@9.0.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/"
+  }
+}
+</script>
+    <script type="module" crossorigin src="/assets/index-B9jV7H1w.js"></script>
+  </head>
+  <body>
+    <div id="root">
+      <div class="loading-screen">
+        <div class="tent-spinner">
+          <div class="spinner-ring"></div>
+          <div class="tent-shape"></div>
+          <div class="tent-door"></div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
