@@ -1,25 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import GameCanvas from './components/GameCanvas';
 import ControlPanel from './components/ControlPanel';
-import { GameState, WeatherType, TimeOfDay, GameItem, FloorType } from './types';
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Save } from 'lucide-react';
+import { GameState, WeatherType, TimeOfDay, GameItem, FloorType, WaterTheme } from './types';
+import { Save, Check } from 'lucide-react';
 
 function App() {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
   
-  // Mobile/UI Input State
-  const [mobileInput, setMobileInput] = useState({
-    forward: false,
-    backward: false,
-    left: false,
-    right: false,
-    jump: false
-  });
-
   const [gameState, setGameState] = useState<GameState>({
     weather: WeatherType.SUNNY,
     time: TimeOfDay.DAY,
     floor: FloorType.GRASS, // Initialize Floor
+    waterTheme: WaterTheme.BLUE,
     islandTheme: 'forest',
     cameraMode: 'ISLAND',
     tent: {
@@ -28,6 +21,7 @@ function App() {
       rug: 'ETHNIC', 
       isLit: false,
       isDoorOpen: true, 
+      position: [4, 0, -4],
     },
     // Initialize with starter items so they are editable
     placedItems: [
@@ -38,6 +32,7 @@ function App() {
     avatar: {
       id: 'main_avatar',
       gender: 'FEMALE',
+      skinTone: 'TONE1',
       outfit: 'JEANS_BLOUSE',
       shoes: 'RED_CANVAS',
       hairstyle: 'PONYTAIL',
@@ -47,20 +42,7 @@ function App() {
       rotation: [0, 0, 0],
       pose: 'IDLE'
     },
-    partners: [
-      {
-        id: 'partner_initial',
-        gender: 'MALE',
-        outfit: 'BLACK_SUIT',
-        shoes: 'BLACK_SNEAKERS_M',
-        hairstyle: 'SHORT_BLACK',
-        blush: 'NONE',
-        accessories: ['GLASSES', 'WATCH'],
-        position: [-2, 0, 4],
-        rotation: [0, 0, 0],
-        pose: 'IDLE'
-      }
-    ],
+    partners: [],
     pets: [
       {
         id: 'pet_initial',
@@ -83,6 +65,27 @@ function App() {
         const parsed = JSON.parse(saved);
         // Basic validation/migration could go here
         if (parsed && parsed.avatar) {
+          if (parsed.tent && !parsed.tent.position) {
+            parsed.tent.position = [4, 0, -4];
+          }
+          if (!parsed.waterTheme) {
+            parsed.waterTheme = WaterTheme.BLUE;
+          }
+          if (parsed.avatar && !parsed.avatar.skinTone) {
+            parsed.avatar.skinTone = 'TONE1';
+          }
+          if (parsed.avatar && !['SHORT', 'LONG', 'PONYTAIL'].includes(parsed.avatar.hairstyle)) {
+            parsed.avatar.hairstyle = 'SHORT';
+          }
+          if (Array.isArray(parsed.partners)) {
+            parsed.partners = parsed.partners.map((p: any) => {
+              const withSkin = p.skinTone ? p : { ...p, skinTone: 'TONE1' };
+              if (!['SHORT', 'LONG', 'PONYTAIL'].includes(withSkin.hairstyle)) {
+                return { ...withSkin, hairstyle: 'SHORT' };
+              }
+              return withSkin;
+            });
+          }
           setGameState(parsed);
         }
       } catch (e) {
@@ -185,13 +188,31 @@ function App() {
     });
   };
 
-  // Helper to handle touch/mouse hold for mobile controls
-  const handleControl = (key: keyof typeof mobileInput, value: boolean) => {
-      setMobileInput(prev => ({ ...prev, [key]: value }));
+  const handleMoveTent = (newPosition: [number, number, number]) => {
+    setGameState(prev => ({
+      ...prev,
+      tent: {
+        ...prev.tent,
+        position: newPosition
+      }
+    }));
+  };
+
+  const exitEditMode = () => {
+    setSelectedItemId(null);
+    setIsEditMode(false);
+  };
+
+  const handleEditButton = () => {
+    if (isEditMode) {
+      exitEditMode();
+    } else {
+      setIsEditMode(true);
+    }
   };
 
   return (
-    <div className="w-full h-screen relative overflow-hidden">
+    <div className="w-full h-full relative overflow-hidden">
       
       {/* 3D Game Layer */}
       <div className="absolute inset-0 z-0">
@@ -202,10 +223,11 @@ function App() {
           onMoveItem={handleMoveItem}
           onMovePet={handleMovePet}
           onMovePartner={handleMovePartner}
+          onMoveTent={handleMoveTent}
           onRotateItem={handleRotateItem}
           selectedItemId={selectedItemId}
           setSelectedItemId={setSelectedItemId}
-          mobileInput={mobileInput}
+          isEditMode={isEditMode}
         />
       </div>
 
@@ -214,72 +236,46 @@ function App() {
         
         {/* Top Header */}
         <div className="flex justify-between items-start pointer-events-auto">
-           <div className="bg-white/80 backdrop-blur-md px-6 py-3 rounded-full shadow-lg border-2 border-white transform -rotate-1 hover:scale-105 transition-transform flex gap-3 items-center">
-              <h1 className="text-xl font-black text-orange-500 tracking-wide flex items-center gap-2">
-                ⛺ Yaloo camp!
+           <div className="bg-white/80 backdrop-blur-md px-3 py-2 rounded-full shadow-lg border-2 border-white transform -rotate-1 hover:scale-105 transition-transform flex gap-2 items-center">
+              <h1 className="text-sm font-black text-orange-500 tracking-wide flex items-center gap-2">
+                ⛺ Zoey camp
               </h1>
               <button 
                 id="save-btn"
                 onClick={saveGame}
-                className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-full shadow-md transition-all flex items-center justify-center w-10 h-10"
+                className="text-slate-600 hover:text-slate-900 transition-all flex items-center justify-center"
                 title="Save Game"
               >
                 <Save size={18} />
               </button>
            </div>
 
-           {/* Mobile Controls (Top Right) */}
-           <div className="flex flex-col items-center gap-2 bg-black/10 backdrop-blur-sm p-3 rounded-3xl">
-              <button 
-                onMouseDown={() => handleControl('forward', true)} onMouseUp={() => handleControl('forward', false)} onMouseLeave={() => handleControl('forward', false)}
-                onTouchStart={() => handleControl('forward', true)} onTouchEnd={() => handleControl('forward', false)}
-                className="w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center active:bg-orange-100 active:scale-95 transition-all"
-              >
-                  <ArrowUp className="text-slate-600" />
-              </button>
-              <div className="flex gap-2">
-                  <button 
-                    onMouseDown={() => handleControl('left', true)} onMouseUp={() => handleControl('left', false)} onMouseLeave={() => handleControl('left', false)}
-                    onTouchStart={() => handleControl('left', true)} onTouchEnd={() => handleControl('left', false)}
-                    className="w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center active:bg-orange-100 active:scale-95 transition-all"
-                  >
-                      <ArrowLeft className="text-slate-600" />
-                  </button>
-                  <button 
-                    onMouseDown={() => handleControl('backward', true)} onMouseUp={() => handleControl('backward', false)} onMouseLeave={() => handleControl('backward', false)}
-                    onTouchStart={() => handleControl('backward', true)} onTouchEnd={() => handleControl('backward', false)}
-                    className="w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center active:bg-orange-100 active:scale-95 transition-all"
-                  >
-                      <ArrowDown className="text-slate-600" />
-                  </button>
-                  <button 
-                    onMouseDown={() => handleControl('right', true)} onMouseUp={() => handleControl('right', false)} onMouseLeave={() => handleControl('right', false)}
-                    onTouchStart={() => handleControl('right', true)} onTouchEnd={() => handleControl('right', false)}
-                    className="w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center active:bg-orange-100 active:scale-95 transition-all"
-                  >
-                      <ArrowRight className="text-slate-600" />
-                  </button>
-              </div>
-              <button 
-                onMouseDown={() => handleControl('jump', true)} onMouseUp={() => handleControl('jump', false)} onMouseLeave={() => handleControl('jump', false)}
-                onTouchStart={() => handleControl('jump', true)} onTouchEnd={() => handleControl('jump', false)}
-                className="w-16 h-12 mt-1 bg-orange-400 rounded-xl shadow-lg flex items-center justify-center active:bg-orange-500 active:scale-95 transition-all text-white font-bold text-xs"
-              >
-                  JUMP!
-              </button>
-           </div>
+           {/* Edit Button (Top Right) */}
+           <button
+             onClick={handleEditButton}
+             className="bg-white/80 backdrop-blur-md px-3 py-2 rounded-full shadow-lg border-2 border-white text-orange-500 font-bold text-xs hover:scale-105 transition-transform flex items-center gap-1"
+           >
+             {isEditMode && <Check size={14} />}
+             {isEditMode ? '편집 완료' : 'EDIT'}
+           </button>
         </div>
 
         {/* Bottom Controls */}
         <div className="flex justify-end items-end pointer-events-auto">
-           <ControlPanel 
-              gameState={gameState} 
-              setGameState={setGameState} 
-              selectedItemId={selectedItemId}
-              setSelectedItemId={setSelectedItemId}
-              onRemoveItem={handleRemoveItem}
-              onRotateItem={handleRotateItem}
-           />
+          <div className="flex flex-col items-end gap-3">
+            {isEditMode && (
+              <ControlPanel 
+                 gameState={gameState} 
+                 setGameState={setGameState} 
+                 selectedItemId={selectedItemId}
+                 setSelectedItemId={setSelectedItemId}
+                 onRemoveItem={handleRemoveItem}
+                 onRotateItem={handleRotateItem}
+                 isEditMode={isEditMode}
+                 setIsEditMode={setIsEditMode}
+              />
+            )}
+          </div>
         </div>
 
       </div>

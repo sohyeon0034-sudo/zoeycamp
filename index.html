@@ -11,7 +11,7 @@
     <style>
       body {
         font-family: 'Fredoka', sans-serif;
-        background-color: #00a8ff; /* Vibrant Azure Blue */
+        background-color: #ffffff;
         overflow: hidden;
         margin: 0;
       }
@@ -22,6 +22,57 @@
       }
       .animate-pop {
         animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      @keyframes bob {
+        0%, 100% { transform: translate(-50%, -52%); }
+        50% { transform: translate(-50%, -48%); }
+      }
+      .loading-screen {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+      }
+      .tent-spinner {
+        position: relative;
+        width: 84px;
+        height: 84px;
+      }
+      .spinner-ring {
+        position: absolute;
+        inset: 0;
+        border: 2px solid rgba(244, 162, 97, 0.7);
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 1.2s linear infinite;
+      }
+      .tent-shape {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 0;
+        height: 0;
+        border-left: 26px solid transparent;
+        border-right: 26px solid transparent;
+        border-bottom: 40px solid #f4a261;
+        animation: bob 1.6s ease-in-out infinite;
+      }
+      .tent-door {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 0;
+        height: 0;
+        border-left: 8px solid transparent;
+        border-right: 8px solid transparent;
+        border-bottom: 16px solid #ffffff;
+        transform: translate(-50%, -8px);
+        opacity: 0.9;
       }
       /* Hide scrollbar for UI panels */
       .scrollbar-hide::-webkit-scrollbar {
@@ -34,6 +85,8 @@
       #root {
         width: 100vw;
         height: 100vh;
+        height: 100svh;
+        position: relative;
       }
     </style>
     <script type="importmap">
@@ -55,6 +108,15 @@
 </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="loading-screen">
+        <div class="tent-spinner">
+          <div class="spinner-ring"></div>
+          <div class="tent-shape"></div>
+          <div class="tent-door"></div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>

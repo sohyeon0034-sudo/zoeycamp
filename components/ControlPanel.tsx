@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { GameState, WeatherType, TimeOfDay, GameItem, ItemBlueprint, PetState, AvatarState, ItemCategory, FloorType } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { GameState, WeatherType, TimeOfDay, GameItem, ItemBlueprint, PetState, AvatarState, ItemCategory, FloorType, WaterTheme } from '../types';
 import { 
     AVAILABLE_ITEMS, 
     AVATAR_OUTFITS, AVATAR_SHOES, AVATAR_HAIRSTYLES, AVATAR_ACCESSORIES, AVATAR_BLUSH, 
@@ -16,7 +16,20 @@ interface ControlPanelProps {
   setSelectedItemId: (id: string | null) => void;
   onRemoveItem: (id: string) => void;
   onRotateItem: (id: string, angleDelta: number) => void;
+  isEditMode: boolean;
+  setIsEditMode: (value: boolean) => void;
 }
+
+const WATER_THEME_OPTIONS = [
+  { id: WaterTheme.BLUE, name: 'Blue', color: '#3a9ed6', icon: '🌊' },
+  { id: WaterTheme.EMERALD, name: 'Emerald', color: '#39c6b2', icon: '🟢' }
+];
+const SKIN_TONE_OPTIONS = [
+  { id: 'TONE1', name: '1', color: '#ffdecb' },
+  { id: 'TONE2', name: '2', color: '#f2c4a4' },
+  { id: 'TONE3', name: '3', color: '#d79a7a' },
+  { id: 'TONE4', name: '4', color: '#b87958' }
+];
 
 const ControlPanel: React.FC<ControlPanelProps> = ({ 
   gameState, 
@@ -24,10 +37,12 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   selectedItemId, 
   setSelectedItemId,
   onRemoveItem,
-  onRotateItem
+  onRotateItem,
+  isEditMode,
+  setIsEditMode
 }) => {
   const [activeTab, setActiveTab] = useState<'ENV' | 'YOU' | 'FRIEND' | 'PETS' | 'DECOR' | 'TENT' | 'NATURE'>('ENV');
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(true);
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
 
   // If an item/pet is selected, we want to show the Edit Interface, overriding normal tabs
@@ -36,6 +51,28 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   // Check if partner is selected (using 'friend_' prefix)
   const isPartnerSelected = selectedItemId?.startsWith('friend_');
   const selectedPartner = gameState.partners.find(p => p.id === selectedItemId);
+
+  const prevEditModeRef = useRef(isEditMode);
+
+  useEffect(() => {
+    const prev = prevEditModeRef.current;
+    if (isEditMode && !prev) {
+      setIsMinimized(false);
+    }
+    if (!isEditMode && prev) {
+      setIsMinimized(true);
+      if (selectedItemId) setSelectedItemId(null);
+    }
+    prevEditModeRef.current = isEditMode;
+  }, [isEditMode, selectedItemId, setSelectedItemId]);
+
+  const handleTogglePanel = () => {
+    const next = !isMinimized;
+    setIsMinimized(next);
+    if (!next) {
+      setIsEditMode(true);
+    }
+  };
 
   const addItem = (item: ItemBlueprint) => {
     const x = (Math.random() - 0.5) * 6; // Spread slightly wider
@@ -84,9 +121,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
       const newFriend: AvatarState = {
           id: `friend_${Date.now()}`,
           gender: gender,
+          skinTone: 'TONE1',
           outfit: gender === 'MALE' ? 'BLACK_SUIT' : 'JEANS_BLOUSE',
           shoes: gender === 'MALE' ? 'BLACK_SNEAKERS_M' : 'RED_CANVAS',
-          hairstyle: gender === 'MALE' ? 'SHORT_BLACK' : 'LONG',
+          hairstyle: gender === 'MALE' ? 'SHORT' : 'LONG',
           blush: 'NONE',
           accessories: [],
           position: [-2 + Math.random(), 0, 3 + Math.random()],
@@ -180,7 +218,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   };
 
   // --- Render Edit Mode if Item Selected ---
-  if (selectedItem || selectedPet || isPartnerSelected) {
+  if (isEditMode && (selectedItem || selectedPet || isPartnerSelected)) {
     const isPet = !!selectedPet;
     const isFriend = isPartnerSelected;
     
@@ -199,45 +237,50 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
     }
 
     return (
-      <div className="w-full md:w-80 bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl flex flex-col h-[300px] overflow-hidden border-2 border-orange-100 animate-pop">
-          <div className="bg-orange-50 p-4 border-b border-orange-100 flex justify-between items-center">
-            <h2 className="text-lg font-black text-orange-600 tracking-wide flex items-center gap-2">
+      <div className="w-80 max-w-[20rem] min-w-[20rem] bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl flex flex-col overflow-hidden border-2 border-orange-100 animate-pop shrink-0">
+          <div className="bg-orange-50 px-3 py-2 border-b border-orange-100 flex items-center justify-between">
+            <div className="w-5" /> {/* Spacer for centering */}
+            <h2 className="text-base font-black text-orange-600 tracking-wide text-center">
                EDIT {isPet ? 'PET' : (isFriend ? 'FRIEND' : 'ITEM')}
             </h2>
             <button onClick={() => setSelectedItemId(null)} className="text-orange-300 hover:text-orange-500">
-               <X size={20} />
+               <X size={18} />
             </button>
           </div>
 
-          <div className="flex-1 p-6 flex flex-col items-center justify-center gap-6">
-              <div className="text-center">
-                 <div className="text-4xl mb-2">{icon}</div>
-                 <div className="font-bold text-slate-700">{name}</div>
-                 <div className="text-xs text-slate-400 mt-1">Drag object to move</div>
+          <div className="px-3 pt-3 pb-5 flex flex-col items-center justify-start gap-4">
+              <div className="flex items-center gap-3 w-full">
+                 <div className="text-3xl">{icon}</div>
+                 <div className="text-left">
+                   <div className="text-sm font-bold text-slate-700">{name}</div>
+                   <div className="text-[11px] text-slate-400">
+                     {isPet ? 'Pet' : (isFriend ? 'Friend' : 'Item')}
+                   </div>
+                 </div>
               </div>
 
-              <div className="flex gap-4 w-full justify-center">
+              <div className="flex gap-3 w-full justify-center">
                   <button 
                       onClick={() => onRotateItem(selectedItemId!, -Math.PI / 4)}
-                      className="p-3 bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-blue-500 shadow-sm active:scale-95 transition-all"
+                      className="p-2 bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-blue-500 shadow-sm active:scale-95 transition-all"
                       title="Rotate Left"
                   >
-                      <RotateCcw size={20} />
+                      <RotateCcw size={18} />
                   </button>
                   <button 
                       onClick={() => onRotateItem(selectedItemId!, Math.PI / 4)}
-                      className="p-3 bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-blue-500 shadow-sm active:scale-95 transition-all"
+                      className="p-2 bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-blue-500 shadow-sm active:scale-95 transition-all"
                       title="Rotate Right"
                   >
-                      <RotateCw size={20} />
+                      <RotateCw size={18} />
                   </button>
-                  <div className="w-px bg-slate-200 mx-2"></div>
+                  <div className="w-px bg-slate-200 mx-1"></div>
 
                   <button 
                     onClick={() => isFriend ? removeFriend(selectedItemId!) : onRemoveItem(selectedItemId!)}
-                    className="flex-1 bg-red-50 border border-red-100 text-red-500 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-100 hover:scale-105 active:scale-95 transition-all shadow-sm"
+                    className="flex-1 py-2 bg-red-50 border border-red-100 text-red-500 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-100 hover:scale-105 active:scale-95 transition-all shadow-sm"
                   >
-                    <Trash2 size={18} /> {isPet ? 'Send Home' : (isFriend ? 'Dismiss' : 'Delete')}
+                    <Trash2 size={16} /> {isPet ? 'Send Home' : (isFriend ? 'Dismiss' : 'Delete')}
                   </button>
               </div>
           </div>
@@ -335,6 +378,23 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
               </div>
             </div>
 
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 block mb-2">Skin Tone</span>
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                {SKIN_TONE_OPTIONS.map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => updateTarget({ skinTone: s.id })}
+                    className={`px-3 py-2 bg-white rounded-lg flex items-center justify-center shrink-0 border border-slate-100 ${target.skinTone === s.id ? 'ring-2 ring-amber-300 bg-amber-50' : ''}`}
+                    title={`Tone ${s.name}`}
+                  >
+                    <span className="w-5 h-5 rounded-full border border-white shadow-sm" style={{ backgroundColor: s.color }} />
+                    <span className="text-[9px] text-slate-500 font-bold ml-2">{s.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {!isMale && (
              <div>
               <span className="text-[10px] font-bold text-slate-400 block mb-2">Cheeks</span>
@@ -375,17 +435,17 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   // Adjusted Height Logic for Mobile: use percentage height (e.g. 55vh) instead of fixed pixel on small screens
   // to ensure the bottom navigation bar is visible.
   return (
-    <div className={`w-full md:w-80 bg-white/80 backdrop-blur-md rounded-3xl shadow-xl flex flex-col overflow-hidden border border-white/50 transition-all duration-300 ease-in-out ${isMinimized ? 'h-16' : 'h-[55vh] md:h-[500px]'}`}>
+    <div className={`w-80 max-w-[20rem] min-w-[20rem] bg-white/80 backdrop-blur-md rounded-3xl shadow-xl flex flex-col overflow-hidden border border-white/50 transition-all duration-300 ease-in-out shrink-0 ${isMinimized ? 'h-16' : 'h-[calc(55vh-30px)] md:h-[470px]'}`}>
       
       {/* Header */}
       <div 
-        className="bg-slate-100/50 p-4 border-b border-white/50 flex justify-between items-center cursor-pointer hover:bg-slate-100/80 transition-colors"
-        onClick={() => setIsMinimized(!isMinimized)}
+        className="bg-slate-100/50 px-3 py-2 border-b border-white/50 flex justify-between items-center cursor-pointer hover:bg-slate-100/80 transition-colors"
+        onClick={handleTogglePanel}
       >
         <div className="w-5" /> {/* Spacer for centering */}
-        <h2 className="text-lg font-black text-slate-700 text-center tracking-wide">SETTING</h2>
+        <h2 className="text-sm font-black text-slate-700 text-center tracking-wide">EDIT</h2>
         <button className="text-slate-400 hover:text-slate-600">
-            {isMinimized ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          {isMinimized ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
         </button>
       </div>
 
@@ -461,6 +521,28 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                     >
                        <span className="text-lg">{f.icon}</span>
                        <span className="text-[9px] font-bold mt-1 truncate w-full text-center px-1">{f.name.split(' ')[0]}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-cyan-50/80 p-3 rounded-2xl">
+                <span className="text-xs font-bold text-cyan-500 block mb-2">Sea</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {WATER_THEME_OPTIONS.map(w => (
+                    <button
+                      key={w.id}
+                      onClick={() => setGameState(prev => ({ ...prev, waterTheme: w.id }))}
+                      className={`flex items-center justify-center gap-2 py-2 rounded-lg transition-all ${
+                        gameState.waterTheme === w.id
+                        ? 'bg-white text-cyan-700 shadow-sm scale-105 ring-2 ring-cyan-100'
+                        : 'text-slate-400 hover:bg-white/50'
+                      }`}
+                      title={w.name}
+                    >
+                      <span className="text-base">{w.icon}</span>
+                      <span className="text-[10px] font-bold">{w.name}</span>
+                      <span className="w-3 h-3 rounded-full" style={{ backgroundColor: w.color }} />
                     </button>
                   ))}
                 </div>

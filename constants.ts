@@ -20,6 +20,8 @@ export const AVAILABLE_ITEMS: ItemBlueprint[] = [
   { id: 'tree_round', name: 'Round Tree', icon: '🌳', category: ItemCategory.PLANT },
   { id: 'tree_zelkova', name: 'Zelkova', icon: '🥦', category: ItemCategory.PLANT },
   { id: 'tree_birch', name: 'Birch Tree', icon: '🎋', category: ItemCategory.PLANT },
+  { id: 'tree_palm', name: 'Palm Tree', icon: '🌴', category: ItemCategory.PLANT },
+  { id: 'tree_lemon', name: 'Lemon Tree', icon: '🍋', category: ItemCategory.PLANT },
   { id: 'mini_tree', name: 'Mini Tree', icon: '🎄', category: ItemCategory.PLANT },
 
   // Furniture
@@ -30,12 +32,15 @@ export const AVAILABLE_ITEMS: ItemBlueprint[] = [
   { id: 'camping_chair', name: 'Camping Chair', icon: '🟑', category: ItemCategory.FURNITURE },
   { id: 'camping_table', name: 'Camping Table', icon: '🪵', category: ItemCategory.FURNITURE },
   { id: 'camping_box', name: 'Cargo Box', icon: '📦', category: ItemCategory.FURNITURE },
+  { id: 'picnic_table_small', name: 'Small Picnic Table', icon: '🧺', category: ItemCategory.FURNITURE },
   
   // Decoration
   { id: 'snowman', name: 'Snowman', icon: '☃️', category: ItemCategory.DECORATION },
   { id: 'snow_pile', name: 'Snow Pile', icon: '❄️', category: ItemCategory.DECORATION },
   { id: 'lantern', name: 'Camping Lantern', icon: '🏮', category: ItemCategory.DECORATION },
   { id: 'campfire', name: 'Campfire', icon: '🔥', category: ItemCategory.DECORATION },
+  { id: 'duck_float', name: 'Duck Float', icon: '🛟', category: ItemCategory.DECORATION },
+  { id: 'duck_feet', name: 'Duck Feet', icon: '🪿', category: ItemCategory.DECORATION },
   { id: 'pond', name: 'Small Pond', icon: '💧', category: ItemCategory.DECORATION },
   { id: 'teddy_bear', name: 'Teddy Bear', icon: '🧸', category: ItemCategory.DECORATION },
   { id: 'books', name: 'Book Stack', icon: '📚', category: ItemCategory.DECORATION },
@@ -71,10 +76,9 @@ export const AVATAR_SHOES = [
 ];
 
 export const AVATAR_HAIRSTYLES = [
-  { id: 'LONG', name: 'Long', icon: '👩🏻' },
   { id: 'SHORT', name: 'Bob', icon: '👩🏻‍🦰' },
+  { id: 'LONG', name: 'Long', icon: '👩🏻' },
   { id: 'PONYTAIL', name: 'Ponytail', icon: '👱🏻‍♀️' },
-  { id: 'TWINTAIL', name: 'Twin Tails', icon: '👧🏻' },
 ];
 
 export const AVATAR_ACCESSORIES = [
@@ -102,9 +106,9 @@ export const PARTNER_SHOES = [
 ];
 
 export const PARTNER_HAIRSTYLES = [
-    { id: 'SHORT_BLACK', name: 'Short Cut', icon: '👦🏻' },
-    { id: 'SHORT_PERM', name: 'Perm', icon: '🧑🏻‍🦱' },
-    { id: 'UPSTYLE', name: 'Pompadour', icon: '😎' },
+    { id: 'SHORT', name: 'Bob', icon: '👦🏻' },
+    { id: 'LONG', name: 'Long', icon: '🧑🏻' },
+    { id: 'PONYTAIL', name: 'Ponytail', icon: '🧑🏻‍🦱' },
 ];
 
 export const PARTNER_ACCESSORIES = [

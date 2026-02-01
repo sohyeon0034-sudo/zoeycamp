@@ -19,6 +19,11 @@ export enum FloorType {
   DIRT = 'DIRT'
 }
 
+export enum WaterTheme {
+  BLUE = 'BLUE',
+  EMERALD = 'EMERALD'
+}
+
 export enum ItemCategory {
   FURNITURE = 'FURNITURE',
   DECORATION = 'DECORATION',
@@ -46,10 +51,11 @@ export interface GameItem extends ItemBlueprint {
 export interface AvatarState {
   id: string; // Add ID to identify main vs partner
   gender: 'MALE' | 'FEMALE'; // Added gender
+  skinTone: 'TONE1' | 'TONE2' | 'TONE3' | 'TONE4';
   // Female & Male Options Combined for Type Safety
   outfit: 'PINK_DRESS' | 'JEANS_BLOUSE' | 'YELLOW_SHORTS' | 'BLACK_CHIC' | 'BLACK_SUIT' | 'WHITE_SHIRT_JEANS' | 'NAVY_HOODIE' | 'GREY_HOODIE' | 'YELLOW_RAINCOAT' | 'PINK_BIKINI' | 'BLACK_ONEPIECE' | 'BLACK_BOXERS' | 'BLACK_RASHGUARD';
   shoes: 'RED_CANVAS' | 'BLACK_BOOTS' | 'GREEN_SNEAKERS' | 'BLACK_SANDALS' | 'GREY_SNEAKERS' | 'BLACK_SNEAKERS_M' | 'BAREFOOT';
-  hairstyle: 'LONG' | 'SHORT' | 'PONYTAIL' | 'TWINTAIL' | 'SHORT_BLACK' | 'SHORT_PERM' | 'UPSTYLE';
+  hairstyle: 'LONG' | 'SHORT' | 'PONYTAIL';
   blush: 'NONE' | 'SOFT_PINK' | 'HOT_PINK' | 'ORANGE';
   accessories: string[]; 
   position: [number, number, number];
@@ -72,6 +78,7 @@ export interface GameState {
   weather: WeatherType;
   time: TimeOfDay;
   floor: FloorType; // Added Floor Type
+  waterTheme: WaterTheme;
   islandTheme: string; 
   cameraMode: 'ISLAND' | 'TENT_INTERIOR';
   tent: {
@@ -80,6 +87,7 @@ export interface GameState {
     rug: 'ETHNIC' | 'BLUE_FUR' | 'SILVER' | 'VINTAGE'; 
     isLit: boolean;
     isDoorOpen: boolean;
+    position: [number, number, number];
   };
   placedItems: GameItem[];
   avatar: AvatarState;
