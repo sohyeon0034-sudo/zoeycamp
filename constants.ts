@@ -38,6 +38,9 @@ export const AVAILABLE_ITEMS: ItemBlueprint[] = [
   { id: 'snowman', name: 'Snowman', icon: '☃️', category: ItemCategory.DECORATION },
   { id: 'snow_pile', name: 'Snow Pile', icon: '❄️', category: ItemCategory.DECORATION },
   { id: 'lantern', name: 'Camping Lantern', icon: '🏮', category: ItemCategory.DECORATION },
+  { id: 'wood_lamp', name: 'Wood Street Lamp', icon: '💡', category: ItemCategory.DECORATION },
+  { id: 'candle', name: 'Candle', icon: '🕯️', category: ItemCategory.DECORATION },
+  { id: 'flashlight', name: 'Flashlight', icon: '🔦', category: ItemCategory.DECORATION },
   { id: 'campfire', name: 'Campfire', icon: '🔥', category: ItemCategory.DECORATION },
   { id: 'duck_float', name: 'Duck Float', icon: '🛟', category: ItemCategory.DECORATION },
   { id: 'duck_feet', name: 'Duck Feet', icon: '🪿', category: ItemCategory.DECORATION },
@@ -54,6 +57,10 @@ export const AVAILABLE_ITEMS: ItemBlueprint[] = [
   { id: 'marshmallow', name: 'Marshmallow', icon: '🍡', category: ItemCategory.FOOD },
   { id: 'pot', name: 'Cooking Pot', icon: '🍲', category: ItemCategory.FOOD },
   { id: 'coffee_pot', name: 'Coffee Pot', icon: '☕', category: ItemCategory.FOOD },
+  { id: 'camping_burner', name: 'Camping Burner', icon: '🍳', category: ItemCategory.FOOD },
+  { id: 'ramen_pot', name: 'Ramen Pot', icon: '🍜', category: ItemCategory.FOOD },
+  { id: 'spoon_chopsticks', name: 'Spoon & Chopsticks', icon: '🥢', category: ItemCategory.FOOD },
+  { id: 'choco_cookie', name: 'Pistachio Choco Cookie', icon: '🍪', category: ItemCategory.FOOD },
 ];
 
 // --- Female Avatar Assets ---
@@ -64,6 +71,8 @@ export const AVATAR_OUTFITS = [
   { id: 'BLACK_CHIC', name: 'All Black', icon: '🖤' },
   { id: 'YELLOW_RAINCOAT', name: 'Raincoat', icon: '🧥' },
   { id: 'PINK_BIKINI', name: 'Pink Bikini', icon: '👙' },
+  { id: 'SKY_BIKINI_SKIRT', name: 'Sky Bikini + Skirt', icon: '🩵' },
+  { id: 'PURPLE_BIKINI_GRADIENT_SKIRT', name: 'Purple Bikini + Gradient Skirt', icon: '💜' },
   { id: 'BLACK_ONEPIECE', name: 'Black Swimsuit', icon: '🩱' },
 ];
 
@@ -79,6 +88,8 @@ export const AVATAR_HAIRSTYLES = [
   { id: 'SHORT', name: 'Bob', icon: '👩🏻‍🦰' },
   { id: 'LONG', name: 'Long', icon: '👩🏻' },
   { id: 'PONYTAIL', name: 'Ponytail', icon: '👱🏻‍♀️' },
+  { id: 'PONYTAIL_PINK', name: 'Ponytail (Pink Tie)', icon: '🎀' },
+  { id: 'BUN_GREEN', name: 'Top Bun (Green Tie)', icon: '🟢' },
 ];
 
 export const AVATAR_ACCESSORIES = [
@@ -141,6 +152,8 @@ export const TENT_PATTERNS = [
     { id: 'DOTS', name: 'Black & Dots', icon: '⚫' },
     { id: 'RAINBOW', name: 'Rainbow', icon: '🌈' },
     { id: 'HEARTS', name: 'Pink Hearts', icon: '💖' },
+    { id: 'YELLOW_STARS', name: 'Yellow Stars', icon: '⭐' },
+    { id: 'KHAKI_OUTDOOR', name: 'Khaki Outdoor', icon: '🏕️' },
 ];
 
 export const RUG_OPTIONS = [

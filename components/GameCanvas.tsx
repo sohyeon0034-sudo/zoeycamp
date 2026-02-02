@@ -2,13 +2,42 @@ import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useKeyboardControls, KeyboardControls, Cloud, Stars, OrbitControls, useCursor, Billboard, Grid, Text, RoundedBox, MeshDistortMaterial } from '@react-three/drei';
 import * as THREE from 'three';
-import { GameState, WeatherType, TimeOfDay, GameItem, PetState, AvatarState, ItemCategory, FloorType, WaterTheme } from '../types';
+import { GameState, WeatherType, TimeOfDay, GameItem, PetState, AvatarState, ItemCategory, FloorType, WaterTheme, TentState, TentSize } from '../types';
 import { generatePetThought } from '../services/geminiService';
-import { DoorOpen } from 'lucide-react'; 
+import { DoorOpen } from 'lucide-react';
 
 // --- Constants ---
 const MOVEMENT_SPEED = 4;
 const ISLAND_RADIUS = 22;
+const ISLAND_TOP_Y = 0;
+const ISLAND_HEIGHT = 0.6;
+const ISLAND_CENTER_HEIGHT = 1.3;
+const ISLAND_EDGE_HEIGHT = 0.8;
+const ISLAND_CENTER_RADIUS = 0.6;
+const ISLAND_EDGE_RADIUS = 0.9;
+const ISLAND_EDGE_Y_OFFSET = ISLAND_EDGE_HEIGHT - ISLAND_CENTER_HEIGHT;
+const PET_GROUND_OFFSET = -0.06;
+const TREE_GROUND_OFFSET = -0.08;
+
+const getItemGroundOffset = (itemId: string) => {
+    if (itemId.startsWith('tree_') || itemId === 'mini_tree') return TREE_GROUND_OFFSET;
+    return 0;
+};
+
+const getIslandSurfaceY = (x: number, z: number) => {
+    const r = Math.sqrt(x * x + z * z);
+    const t = Math.min(r / ISLAND_RADIUS, 1);
+    const blend = THREE.MathUtils.smoothstep(t, ISLAND_CENTER_RADIUS, ISLAND_EDGE_RADIUS);
+    return ISLAND_TOP_Y + ISLAND_EDGE_Y_OFFSET * blend;
+};
+
+const getGroundedPosition = (pos: [number, number, number], extraYOffset = 0): [number, number, number] => {
+    const groundY = getIslandSurfaceY(pos[0], pos[2]);
+    return [pos[0], pos[1] + groundY + extraYOffset, pos[2]];
+};
+
+const getTentScale = (size: TentSize) => (size === 'SMALL' ? 0.8 : (size === 'LARGE' ? 1.2 : 1));
+const getTentRadius = (size: TentSize) => 1.6 * getTentScale(size);
 
 const GREETINGS = ["Hi!", "Hello!", "Hey there!", "Yo!", "Nice day!", "Campsite looks great!", "Anyone have snacks?", "Relaxing...", "Good vibes only"];
 
@@ -50,6 +79,66 @@ const createPatternTexture = (type: string) => {
         grd.addColorStop(1, "purple");
         ctx.fillStyle = grd;
         ctx.fillRect(0, 0, 512, 512);
+    } else if (type === 'YELLOW_STARS') {
+        // Yellow background with stars
+        ctx.fillStyle = '#f1c40f';
+        ctx.fillRect(0, 0, 512, 512);
+        ctx.fillStyle = '#fff';
+        
+        // Draw stars
+        const drawStar = (x: number, y: number, radius: number) => {
+            ctx.beginPath();
+            for (let i = 0; i < 5; i++) {
+                const outerRadius = radius;
+                const innerRadius = radius * 0.4;
+                const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+                const nextAngle = ((i + 1) * 4 * Math.PI) / 5 - Math.PI / 2;
+                
+                const x1 = x + outerRadius * Math.cos(angle);
+                const y1 = y + outerRadius * Math.sin(angle);
+                const x2 = x + innerRadius * Math.cos(angle + (2 * Math.PI) / 10);
+                const y2 = y + innerRadius * Math.sin(angle + (2 * Math.PI) / 10);
+                
+                if (i === 0) {
+                    ctx.moveTo(x1, y1);
+                } else {
+                    ctx.lineTo(x1, y1);
+                }
+                ctx.lineTo(x2, y2);
+            }
+            ctx.closePath();
+            ctx.fill();
+        };
+        
+        // Draw 50 stars with better visibility
+        for (let i = 0; i < 50; i++) {
+            const x = Math.random() * 512;
+            const y = Math.random() * 512;
+            const size = Math.random() * 6 + 4;
+            drawStar(x, y, size);
+        }
+    } else if (type === 'KHAKI_OUTDOOR') {
+        // Khaki background with outdoor decorations
+        ctx.fillStyle = '#c4a747';
+        ctx.fillRect(0, 0, 512, 512);
+        // Rope pattern
+        ctx.strokeStyle = '#8b7355';
+        ctx.lineWidth = 2;
+        for(let i=0; i<8; i++) {
+            ctx.beginPath();
+            ctx.moveTo(0, i * 64);
+            ctx.quadraticCurveTo(256, i * 64 + 16, 512, i * 64);
+            ctx.stroke();
+        }
+        // Decorative circles (buttons/grommets)
+        ctx.fillStyle = '#5d4037';
+        for(let i=0; i<12; i++) {
+            const x = (i % 4) * 128 + 64;
+            const y = Math.floor(i / 4) * 128 + 64;
+            ctx.beginPath();
+            ctx.arc(x, y, 8, 0, Math.PI * 2);
+            ctx.fill();
+        }
     } else {
         // Default Orange
         ctx.fillStyle = '#e67e22';
@@ -60,6 +149,22 @@ const createPatternTexture = (type: string) => {
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
     return tex;
+}
+
+const getPatternBaseColor = (pattern: string): string => {
+    switch(pattern) {
+        case 'ORANGE':
+            return '#e67e22';
+        case 'YELLOW_STARS':
+            return '#ffffff';
+        case 'KHAKI_OUTDOOR':
+            return '#c4a747';
+        case 'DOTS':
+        case 'HEARTS':
+        case 'RAINBOW':
+        default:
+            return 'white';
+    }
 }
 
 const createWaterTextures = (theme: WaterTheme) => {
@@ -500,7 +605,186 @@ const Campfire = () => {
     );
 };
 const CookingPot = () => ( <group> <mesh position={[0, 0.25, 0]}><cylinderGeometry args={[0.25, 0.2, 0.4]} /><meshStandardMaterial color="#37474f" /></mesh> <mesh position={[0, 0.45, 0]}><cylinderGeometry args={[0.26, 0.26, 0.05]} /><meshStandardMaterial color="#455a64" /></mesh> <mesh position={[0, 0.4, 0]} rotation={[-Math.PI/2, 0, 0]}><circleGeometry args={[0.22]} /><meshStandardMaterial color="#d84315" /></mesh> </group> );
-const CoffeePot = () => ( <group> <mesh position={[0, 0.2, 0]}><cylinderGeometry args={[0.15, 0.2, 0.4]} /><meshStandardMaterial color="#eceff1" /></mesh> <mesh position={[0.15, 0.3, 0]} rotation={[0,0,-Math.PI/2]}><torusGeometry args={[0.08, 0.02, 8, 16, Math.PI]} /><meshStandardMaterial color="#37474f" /></mesh> <mesh position={[-0.15, 0.35, 0]} rotation={[0,0,0.5]}><cylinderGeometry args={[0.03, 0.02, 0.15]} /><meshStandardMaterial color="#eceff1" /></mesh> </group> );
+const CoffeePot = () => {
+    const steamRefs = useRef<THREE.Mesh[]>([]);
+
+    useFrame((state) => {
+        const t = state.clock.elapsedTime;
+        steamRefs.current.forEach((mesh, i) => {
+            if (!mesh) return;
+            const phase = (t * 0.18 + i * 0.4) % 1;
+            mesh.position.y = 0.62 + phase * 0.25;
+            mesh.position.x = Math.sin((t + i) * 1.7) * 0.02;
+            mesh.position.z = Math.cos((t + i) * 1.5) * 0.02;
+            const scale = 0.55 + phase * 0.6;
+            mesh.scale.setScalar(scale);
+            const mat = mesh.material as THREE.MeshStandardMaterial;
+            if (mat) mat.opacity = 0.28 * (1 - phase);
+        });
+    });
+
+    const glassMaterialProps = {
+        color: '#f7f7f7',
+        transparent: true,
+        opacity: 0.55,
+        transmission: 0.85,
+        roughness: 0.12,
+        thickness: 0.2,
+        ior: 1.45
+    };
+
+    return (
+        <group>
+            {/* Glass Carafe */}
+            <mesh position={[0, 0.22, 0]}>
+                <cylinderGeometry args={[0.18, 0.2, 0.36, 20]} />
+                <meshPhysicalMaterial {...glassMaterialProps} />
+            </mesh>
+            <mesh position={[0, 0.41, 0]}>
+                <cylinderGeometry args={[0.11, 0.13, 0.12, 20]} />
+                <meshPhysicalMaterial {...glassMaterialProps} />
+            </mesh>
+            <mesh position={[0, 0.02, 0]}>
+                <cylinderGeometry args={[0.2, 0.22, 0.04, 20]} />
+                <meshStandardMaterial color="#dfe6e9" metalness={0.2} roughness={0.6} />
+            </mesh>
+
+            {/* Coffee Liquid */}
+            <mesh position={[0, 0.2, 0]}>
+                <cylinderGeometry args={[0.16, 0.17, 0.2, 20]} />
+                <meshStandardMaterial color="#5a3b24" roughness={0.4} metalness={0.1} transparent opacity={0.9} />
+            </mesh>
+
+            {/* Handle + Spout */}
+            <mesh position={[0.22, 0.28, 0]} rotation={[0, 0, Math.PI / 2]}>
+                <torusGeometry args={[0.08, 0.02, 8, 16, Math.PI]} />
+                <meshStandardMaterial color="#37474f" roughness={0.7} />
+            </mesh>
+            <mesh position={[-0.2, 0.3, 0.06]} rotation={[0, 0, -0.5]}>
+                <coneGeometry args={[0.05, 0.12, 12]} />
+                <meshStandardMaterial color="#37474f" roughness={0.7} />
+            </mesh>
+
+            {/* Dripper */}
+            <mesh position={[0, 0.54, 0]}>
+                <coneGeometry args={[0.16, 0.2, 20]} />
+                <meshStandardMaterial color="#2d3436" roughness={0.8} />
+            </mesh>
+            <mesh position={[0, 0.54, 0]}>
+                <coneGeometry args={[0.12, 0.16, 20]} />
+                <meshStandardMaterial color="#fafafa" roughness={0.6} />
+            </mesh>
+
+            {/* Steam */}
+            {[0, 1, 2].map((i) => (
+                <mesh
+                    key={i}
+                    ref={(el) => {
+                        if (el) steamRefs.current[i] = el;
+                    }}
+                    position={[0, 0.62, 0]}
+                >
+                    <coneGeometry args={[0.05, 0.18, 12]} />
+                    <meshStandardMaterial color="#ffffff" transparent opacity={0.25} />
+                </mesh>
+            ))}
+        </group>
+    );
+};
+const CampingBurner = () => (
+    <group>
+        <mesh position={[0, 0.05, 0]}>
+            <cylinderGeometry args={[0.26, 0.26, 0.1, 24]} />
+            <meshStandardMaterial color="#2d3436" />
+        </mesh>
+        <mesh position={[0, 0.1, 0]}>
+            <torusGeometry args={[0.12, 0.02, 8, 20]} />
+            <meshStandardMaterial color="#636e72" />
+        </mesh>
+        {[0, (2 * Math.PI) / 3, (4 * Math.PI) / 3].map((a, i) => (
+            <mesh key={i} position={[Math.cos(a) * 0.16, 0.12, Math.sin(a) * 0.16]} rotation={[0, a, 0]}>
+                <boxGeometry args={[0.08, 0.02, 0.2]} />
+                <meshStandardMaterial color="#7f8c8d" />
+            </mesh>
+        ))}
+        <mesh position={[0, -0.1, 0]}>
+            <cylinderGeometry args={[0.12, 0.16, 0.18, 20]} />
+            <meshStandardMaterial color="#c0392b" />
+        </mesh>
+        <mesh position={[0.18, -0.05, 0]}>
+            <cylinderGeometry args={[0.03, 0.03, 0.08, 12]} />
+            <meshStandardMaterial color="#d35400" />
+        </mesh>
+    </group>
+);
+const RamenPot = () => (
+    <group>
+        <mesh position={[0, 0.18, 0]}>
+            <cylinderGeometry args={[0.24, 0.22, 0.26, 24]} />
+            <meshStandardMaterial color="#f0c36d" metalness={0.25} roughness={0.6} />
+        </mesh>
+        <mesh position={[0, 0.32, 0]}>
+            <cylinderGeometry args={[0.25, 0.25, 0.04, 24]} />
+            <meshStandardMaterial color="#f7d38f" metalness={0.2} roughness={0.5} />
+        </mesh>
+        <mesh position={[0, 0.26, 0]} rotation={[-Math.PI/2, 0, 0]}>
+            <circleGeometry args={[0.2, 24]} />
+            <meshStandardMaterial color="#ff6f3d" />
+        </mesh>
+        <mesh position={[0.28, 0.22, 0]} rotation={[0, 0, Math.PI/2]}>
+            <torusGeometry args={[0.06, 0.02, 8, 16, Math.PI]} />
+            <meshStandardMaterial color="#f0c36d" />
+        </mesh>
+        <mesh position={[-0.28, 0.22, 0]} rotation={[0, 0, -Math.PI/2]}>
+            <torusGeometry args={[0.06, 0.02, 8, 16, Math.PI]} />
+            <meshStandardMaterial color="#f0c36d" />
+        </mesh>
+    </group>
+);
+const SpoonChopsticksSet = () => (
+    <group>
+        <mesh position={[0, 0.02, 0]}>
+            <cylinderGeometry args={[0.18, 0.18, 0.04, 20]} />
+            <meshStandardMaterial color="#ecf0f1" />
+        </mesh>
+        <mesh position={[0.04, 0.06, 0]} rotation={[0, 0, 0.2]}>
+            <cylinderGeometry args={[0.01, 0.01, 0.24, 12]} />
+            <meshStandardMaterial color="#bdc3c7" />
+        </mesh>
+        <mesh position={[0.07, 0.1, 0]} rotation={[0, 0, 0.2]}>
+            <sphereGeometry args={[0.03, 12, 12]} />
+            <meshStandardMaterial color="#bdc3c7" />
+        </mesh>
+        <mesh position={[-0.04, 0.06, 0.02]} rotation={[0, 0.05, 0.6]}>
+            <cylinderGeometry args={[0.005, 0.005, 0.28, 10]} />
+            <meshStandardMaterial color="#8e8e8e" />
+        </mesh>
+        <mesh position={[-0.02, 0.06, -0.02]} rotation={[0, -0.05, 0.6]}>
+            <cylinderGeometry args={[0.005, 0.005, 0.28, 10]} />
+            <meshStandardMaterial color="#8e8e8e" />
+        </mesh>
+    </group>
+);
+const ChocoCookie = () => (
+    <group>
+        <mesh position={[-0.08, 0.03, 0]} rotation={[0, Math.PI / 2, 0]}>
+            <cylinderGeometry args={[0.14, 0.14, 0.06, 24, 1, false, 0, Math.PI]} />
+            <meshStandardMaterial color="#3b2a1e" roughness={0.9} />
+        </mesh>
+        <mesh position={[0.08, 0.03, 0]} rotation={[0, -Math.PI / 2, 0]}>
+            <cylinderGeometry args={[0.14, 0.14, 0.06, 24, 1, false, 0, Math.PI]} />
+            <meshStandardMaterial color="#3b2a1e" roughness={0.9} />
+        </mesh>
+        <mesh position={[-0.08, 0.03, 0]} rotation={[0, Math.PI / 2, 0]}>
+            <cylinderGeometry args={[0.11, 0.11, 0.04, 24, 1, false, 0, Math.PI]} />
+            <meshStandardMaterial color="#b7e08a" />
+        </mesh>
+        <mesh position={[0.08, 0.03, 0]} rotation={[0, -Math.PI / 2, 0]}>
+            <cylinderGeometry args={[0.11, 0.11, 0.04, 24, 1, false, 0, Math.PI]} />
+            <meshStandardMaterial color="#b7e08a" />
+        </mesh>
+    </group>
+);
 const Marshmallow = () => ( 
     <group> 
         <mesh position={[0, 0.2, 0]} rotation={[0,0,-0.2]}><cylinderGeometry args={[0.02, 0.02, 0.6]} /><meshStandardMaterial color="#d35400" /></mesh>
@@ -511,6 +795,63 @@ const Marshmallow = () => (
 const CampingChair = () => ( <group> <mesh position={[0.25, 0.4, 0.25]} rotation={[0, 0, -0.2]}><cylinderGeometry args={[0.03, 0.03, 0.9]} /><meshStandardMaterial color="#555" /></mesh> <mesh position={[-0.25, 0.4, 0.25]} rotation={[0, 0, 0.2]}><cylinderGeometry args={[0.03, 0.03, 0.9]} /><meshStandardMaterial color="#555" /></mesh> <mesh position={[0.25, 0.4, -0.25]} rotation={[0, 0, -0.2]}><cylinderGeometry args={[0.03, 0.03, 0.9]} /><meshStandardMaterial color="#555" /></mesh> <mesh position={[-0.25, 0.4, -0.25]} rotation={[0, 0, 0.2]}><cylinderGeometry args={[0.03, 0.03, 0.9]} /><meshStandardMaterial color="#555" /></mesh> <mesh position={[0, 0.4, 0]} rotation={[-0.1, 0, 0]}><boxGeometry args={[0.6, 0.05, 0.6]} /><meshToonMaterial color="#e17055" /></mesh> <mesh position={[0, 0.8, -0.25]} rotation={[-0.2, 0, 0]}><boxGeometry args={[0.6, 0.5, 0.05]} /><meshToonMaterial color="#e17055" /></mesh> <mesh position={[0.32, 0.6, 0]} rotation={[0, 0, 0]}><boxGeometry args={[0.08, 0.05, 0.6]} /><meshStandardMaterial color="#d63031" /></mesh> <mesh position={[-0.32, 0.6, 0]} rotation={[0, 0, 0]}><boxGeometry args={[0.08, 0.05, 0.6]} /><meshStandardMaterial color="#d63031" /></mesh> </group> );
 const CampingTable = () => ( <group> <mesh position={[0, 0.5, 0]}><boxGeometry args={[1.2, 0.08, 0.8]} /><meshStandardMaterial color="#d35400" /></mesh> <mesh position={[0.5, 0.25, 0.3]} rotation={[0, 0, -0.1]}><cylinderGeometry args={[0.04, 0.03, 0.5]} /><meshStandardMaterial color="#b2bec3" /></mesh> <mesh position={[-0.5, 0.25, 0.3]} rotation={[0, 0, 0.1]}><cylinderGeometry args={[0.04, 0.03, 0.5]} /><meshStandardMaterial color="#b2bec3" /></mesh> <mesh position={[0.5, 0.25, -0.3]} rotation={[0, 0, -0.1]}><cylinderGeometry args={[0.04, 0.03, 0.5]} /><meshStandardMaterial color="#b2bec3" /></mesh> <mesh position={[-0.5, 0.25, -0.3]} rotation={[0, 0, 0.1]}><cylinderGeometry args={[0.04, 0.03, 0.5]} /><meshStandardMaterial color="#b2bec3" /></mesh> <mesh position={[0, 0.3, 0]} rotation={[0, 0, 1.57]}><cylinderGeometry args={[0.02, 0.02, 1.0]} /><meshStandardMaterial color="#636e72" /></mesh> </group> );
 const CampingLantern = () => ( <group> <mesh position={[0, 0.1, 0]}><cylinderGeometry args={[0.15, 0.18, 0.2]} /><meshStandardMaterial color="#2d3436" /></mesh> <mesh position={[0, 0.35, 0]}><cylinderGeometry args={[0.12, 0.12, 0.3]} /><meshStandardMaterial color="#fff" transparent opacity={0.3} /></mesh> <mesh position={[0, 0.55, 0]}><coneGeometry args={[0.2, 0.15, 16]} /><meshStandardMaterial color="#2d3436" /></mesh> <mesh position={[0, 0.65, 0]} rotation={[0, 0, 1.57]}><torusGeometry args={[0.1, 0.02, 8, 16]} /><meshStandardMaterial color="#000" /></mesh> <pointLight position={[0, 0.35, 0]} intensity={3} color="#ffeaa7" distance={8} decay={2} /> <mesh position={[0, 0.35, 0]}><sphereGeometry args={[0.05]} /><meshBasicMaterial color="#ffeaa7" /></mesh> </group> );
+const WoodenStreetLamp = () => (
+    <group>
+        <mesh position={[0, 1.2, 0]} castShadow>
+            <cylinderGeometry args={[0.08, 0.1, 2.4, 10]} />
+            <meshStandardMaterial color="#5b3a29" roughness={0.8} />
+        </mesh>
+        <mesh position={[0.35, 2.2, 0]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.04, 0.04, 0.7, 10]} />
+            <meshStandardMaterial color="#5b3a29" roughness={0.8} />
+        </mesh>
+        <group position={[0.7, 2.2, 0]}>
+            <mesh position={[0, 0, 0]}>
+                <boxGeometry args={[0.35, 0.4, 0.35]} />
+                <meshStandardMaterial color="#2d3436" />
+            </mesh>
+            <mesh position={[0, 0, 0]}>
+                <boxGeometry args={[0.28, 0.28, 0.28]} />
+                <meshPhysicalMaterial color="#fff6d6" emissive="#ffe7b3" emissiveIntensity={0.35} transparent opacity={0.55} transmission={0.85} roughness={0.15} thickness={0.2} ior={1.45} />
+            </mesh>
+            <mesh position={[0, 0, 0]}>
+                <sphereGeometry args={[0.06, 16, 16]} />
+                <meshStandardMaterial color="#fff1b8" emissive="#ffdca0" emissiveIntensity={1.2} />
+            </mesh>
+            <pointLight position={[0, 0, 0]} intensity={2.0} distance={7} color="#ffe7b3" decay={2} />
+        </group>
+    </group>
+);
+const Candle = () => (
+    <group>
+        <mesh position={[0, 0.08, 0]}>
+            <cylinderGeometry args={[0.07, 0.08, 0.16, 16]} />
+            <meshStandardMaterial color="#f6f1e1" />
+        </mesh>
+        <mesh position={[0, 0.17, 0]}>
+            <coneGeometry args={[0.03, 0.08, 12]} />
+            <meshStandardMaterial color="#ffd36a" emissive="#ffb84d" emissiveIntensity={0.9} />
+        </mesh>
+        <pointLight position={[0, 0.18, 0]} intensity={0.9} distance={3} color="#ffd9a6" decay={2} />
+    </group>
+);
+const Flashlight = () => (
+    <group>
+        <mesh position={[0, 0.06, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.05, 0.06, 0.3, 16]} />
+            <meshStandardMaterial color="#2f3640" />
+        </mesh>
+        <mesh position={[0, 0.06, 0.17]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.065, 0.07, 0.05, 16]} />
+            <meshStandardMaterial color="#3d3d3d" />
+        </mesh>
+        <mesh position={[0, 0.06, 0.2]}>
+            <circleGeometry args={[0.05, 16]} />
+            <meshStandardMaterial color="#fff3c4" emissive="#ffe7b3" emissiveIntensity={1} />
+        </mesh>
+        <pointLight position={[0, 0.06, 0.26]} intensity={1.4} distance={4} color="#fff3c4" decay={2} />
+    </group>
+);
 const TeddyBear = () => (<group><mesh position={[0,0.3,0]}><sphereGeometry args={[0.25]}/><meshToonMaterial color="#8d6e63"/></mesh><mesh position={[0,0.6,0]}><sphereGeometry args={[0.2]}/><meshToonMaterial color="#8d6e63"/></mesh><mesh position={[0.18,0.7,0]}><sphereGeometry args={[0.08]}/><meshToonMaterial color="#8d6e63"/></mesh><mesh position={[-0.18,0.7,0]}><sphereGeometry args={[0.08]}/><meshToonMaterial color="#8d6e63"/></mesh><mesh position={[0.2,0.3,0.1]}><sphereGeometry args={[0.1]}/><meshToonMaterial color="#8d6e63"/></mesh><mesh position={[-0.2,0.3,0.1]}><sphereGeometry args={[0.1]}/><meshToonMaterial color="#8d6e63"/></mesh><mesh position={[0.1,0.1,0.2]}><sphereGeometry args={[0.1]}/><meshToonMaterial color="#8d6e63"/></mesh><mesh position={[-0.1,0.1,0.2]}><sphereGeometry args={[0.1]}/><meshToonMaterial color="#8d6e63"/></mesh></group>);
 const Pond = () => (<group><mesh rotation={[-Math.PI/2,0,0]} position={[0,0.01,0]}><circleGeometry args={[1.5,32]}/><meshStandardMaterial color="#4fc3f7" roughness={0.1}/></mesh><mesh position={[0.5,0.01,0.5]}><sphereGeometry args={[0.2]}/><meshStandardMaterial color="#95a5a6"/></mesh><mesh position={[-0.8,0.01,-0.2]}><sphereGeometry args={[0.15]}/><meshStandardMaterial color="#7f8c8d"/></mesh></group>);
 const BoxItem = () => (<group><mesh position={[0,0.25,0]}><boxGeometry args={[0.6,0.5,0.4]}/><meshStandardMaterial color="#e67e22"/></mesh><mesh position={[0,0.25,0]}><boxGeometry args={[0.62,0.1,0.42]}/><meshStandardMaterial color="#d35400"/></mesh></group>);
@@ -589,21 +930,61 @@ const GameConsole = () => (<group><mesh position={[0,0.05,0]}><boxGeometry args=
 // --- New Items ---
 const PicnicMat = () => (<mesh position={[0,0.01,0]} rotation={[-Math.PI/2,0,0]}><planeGeometry args={[2, 1.5]} /><meshStandardMaterial color="#dfe6e9" side={THREE.DoubleSide} /><mesh position={[0,0,0.01]}><planeGeometry args={[1.8, 1.3]} /><meshStandardMaterial color="#fab1a0" /></mesh></mesh>);
 const OrangeMat = () => (<mesh position={[0,0.01,0]} rotation={[-Math.PI/2,0,0]}><circleGeometry args={[1, 32]} /><meshStandardMaterial color="#e17055" /></mesh>);
-const Sunbed = () => (
-    <group>
-        {/* Frame */}
-        <mesh position={[0, 0.2, 0]} rotation={[0.1, 0, 0]}><boxGeometry args={[0.7, 0.1, 1.8]} /><meshStandardMaterial color="#d35400" /></mesh>
-        {/* Legs */}
-        <mesh position={[0.3, 0.1, 0.7]}><cylinderGeometry args={[0.03, 0.03, 0.2]} /><meshStandardMaterial color="#d35400" /></mesh>
-        <mesh position={[-0.3, 0.1, 0.7]}><cylinderGeometry args={[0.03, 0.03, 0.2]} /><meshStandardMaterial color="#d35400" /></mesh>
-        <mesh position={[0.3, 0.05, -0.7]}><cylinderGeometry args={[0.03, 0.03, 0.15]} /><meshStandardMaterial color="#d35400" /></mesh>
-        <mesh position={[-0.3, 0.05, -0.7]}><cylinderGeometry args={[0.03, 0.03, 0.15]} /><meshStandardMaterial color="#d35400" /></mesh>
-        {/* Fabric */}
-        <mesh position={[0, 0.26, 0]} rotation={[0.1, 0, 0]}><boxGeometry args={[0.6, 0.05, 1.7]} /><meshStandardMaterial color="white" /></mesh>
-        {/* Pillow */}
-        <mesh position={[0, 0.35, -0.6]} rotation={[0.2, 0, 0]}><boxGeometry args={[0.5, 0.05, 0.3]} /><meshStandardMaterial color="#74b9ff" /></mesh>
-    </group>
-);
+const Sunbed = () => {
+    const seatY = 0.22;
+    const seatZ = 0.1;
+    const seatLength = 0.9;
+    const backLength = 0.9;
+    const backAngle = 0.55;
+    const backPivotZ = seatZ - seatLength / 2;
+
+    return (
+        <group>
+            {/* Seat */}
+            <mesh position={[0, seatY, seatZ]}>
+                <boxGeometry args={[0.7, 0.08, seatLength]} />
+                <meshStandardMaterial color="#d35400" />
+            </mesh>
+            <mesh position={[0, seatY + 0.04, seatZ]}>
+                <boxGeometry args={[0.6, 0.05, seatLength - 0.05]} />
+                <meshStandardMaterial color="white" />
+            </mesh>
+
+            {/* Backrest */}
+            <group position={[0, seatY, backPivotZ]} rotation={[backAngle, 0, 0]}>
+                <mesh position={[0, 0, -backLength / 2]}>
+                    <boxGeometry args={[0.7, 0.08, backLength]} />
+                    <meshStandardMaterial color="#d35400" />
+                </mesh>
+                <mesh position={[0, 0.04, -backLength / 2]}>
+                    <boxGeometry args={[0.6, 0.05, backLength - 0.05]} />
+                    <meshStandardMaterial color="white" />
+                </mesh>
+                <mesh position={[0, 0.12, -backLength + 0.2]} rotation={[0.05, 0, 0]}>
+                    <boxGeometry args={[0.5, 0.06, 0.3]} />
+                    <meshStandardMaterial color="#74b9ff" />
+                </mesh>
+            </group>
+            {/* Legs */}
+            <mesh position={[0.3, 0.11, seatZ + seatLength / 2]}>
+                <cylinderGeometry args={[0.03, 0.03, 0.22]} />
+                <meshStandardMaterial color="#d35400" />
+            </mesh>
+            <mesh position={[-0.3, 0.11, seatZ + seatLength / 2]}>
+                <cylinderGeometry args={[0.03, 0.03, 0.22]} />
+                <meshStandardMaterial color="#d35400" />
+            </mesh>
+            <mesh position={[0.3, 0.11, backPivotZ]}>
+                <cylinderGeometry args={[0.03, 0.03, 0.22]} />
+                <meshStandardMaterial color="#d35400" />
+            </mesh>
+            <mesh position={[-0.3, 0.11, backPivotZ]}>
+                <cylinderGeometry args={[0.03, 0.03, 0.22]} />
+                <meshStandardMaterial color="#d35400" />
+            </mesh>
+        </group>
+    );
+};
 
 const Snowman = () => (
     <group>
@@ -1056,11 +1437,15 @@ const CatModel = ({ base = "#f1c40f", spot = "#d35400", spots = false }: { base?
 
 
 // --- Camera Controller ---
-const CameraController = ({ playerRef, controlsRef }: { playerRef: React.RefObject<THREE.Group>, controlsRef: React.RefObject<any> }) => {
+const CameraController = ({ playerRef, controlsRef, isEditMode }: { playerRef: React.RefObject<THREE.Group>, controlsRef: React.RefObject<any>, isEditMode?: boolean }) => {
   const prevPos = useRef(new THREE.Vector3());
   const isInitialized = useRef(false);
   useFrame((state) => {
     if (!playerRef.current || !controlsRef.current) return;
+    
+    // In edit mode, keep camera still
+    if (isEditMode) return;
+    
     const currentPos = playerRef.current.position;
     if (!isInitialized.current) {
       prevPos.current.copy(currentPos);
@@ -1079,7 +1464,7 @@ const CameraController = ({ playerRef, controlsRef }: { playerRef: React.RefObje
 };
 
 // --- Avatar Component ---
-const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarget, obstacles = [] }: { avatar: AvatarState, playerRef: React.RefObject<THREE.Group>, isPartner?: boolean, moveTarget?: [number, number, number] | null, setMoveTarget?: (target: [number, number, number] | null) => void, obstacles?: Array<{ position: [number, number, number]; radius: number }> }) => {
+const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarget, obstacles = [], getGroundY }: { avatar: AvatarState, playerRef: React.RefObject<THREE.Group>, isPartner?: boolean, moveTarget?: [number, number, number] | null, setMoveTarget?: (target: [number, number, number] | null) => void, obstacles?: Array<{ position: [number, number, number]; radius: number }>, getGroundY?: (x: number, z: number) => number }) => {
   const leftLeg = useRef<THREE.Group>(null);
   const rightLeg = useRef<THREE.Group>(null);
   const leftArm = useRef<THREE.Group>(null);
@@ -1123,6 +1508,7 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
     if (!groupRef.current) return;
 
     let isMoving = false;
+    let wantsJump = false;
     
     // Only main avatar moves with keyboard/mobile
     if (!isPartner && avatar.pose === 'IDLE') {
@@ -1135,12 +1521,15 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
         const isRight = right;
         const isJump = jump;
         const hasManualInput = isForward || isBackward || isLeft || isRight || isJump;
+        wantsJump = isJump;
 
         const applySteeredMove = (dir: THREE.Vector3) => {
             if (dir.lengthSq() === 0) return { moved: false, moveVec: tempVec.set(0, 0, 0) };
             const desiredDir = dir.clone().normalize();
             const stepSize = MOVEMENT_SPEED * delta;
-            nextPos.copy(groupRef.current!.position).addScaledVector(desiredDir, stepSize);
+            const currentX = groupRef.current!.position.x;
+            const currentZ = groupRef.current!.position.z;
+            nextPos.set(currentX, 0, currentZ).addScaledVector(desiredDir, stepSize);
 
             avoidVec.set(0, 0, 0);
             obstacles.forEach(obs => {
@@ -1159,7 +1548,7 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
 
             if (avoidVec.lengthSq() > 0) {
                 steerVec.copy(desiredDir).addScaledVector(avoidVec, 1.6).normalize();
-                nextPos.copy(groupRef.current!.position).addScaledVector(steerVec, stepSize);
+                nextPos.set(currentX, 0, currentZ).addScaledVector(steerVec, stepSize);
             }
 
             if (nextPos.length() > ISLAND_RADIUS - 1) nextPos.setLength(ISLAND_RADIUS - 1);
@@ -1180,9 +1569,10 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
 
             if (nextPos.length() > ISLAND_RADIUS - 1) nextPos.setLength(ISLAND_RADIUS - 1);
 
-            const moveVec = nextPos.clone().sub(groupRef.current!.position);
+            const moveVec = new THREE.Vector3(nextPos.x - currentX, 0, nextPos.z - currentZ);
             if (moveVec.lengthSq() > 0.00001) {
-                groupRef.current!.position.copy(nextPos);
+                groupRef.current!.position.x = nextPos.x;
+                groupRef.current!.position.z = nextPos.z;
                 return { moved: true, moveVec };
             }
             return { moved: false, moveVec };
@@ -1226,21 +1616,24 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
             }
         }
 
-        // Jump Logic
-        if (isJump && !isJumping.current && groupRef.current.position.y <= 0.1) {
-            velocityY.current = 5; // Initial jump velocity
-            isJumping.current = true;
-        }
+    }
+
+    const groundY = getGroundY ? getGroundY(groupRef.current.position.x, groupRef.current.position.z) : 0;
+
+    // Jump Logic
+    if (wantsJump && !isJumping.current && groupRef.current.position.y <= groundY + 0.1) {
+        velocityY.current = 5; // Initial jump velocity
+        isJumping.current = true;
     }
 
     // Apply Physics (Gravity)
-    if (isJumping.current || groupRef.current.position.y > 0) {
+    if (isJumping.current || groupRef.current.position.y > groundY) {
         velocityY.current -= 9.8 * delta; // Gravity
         groupRef.current.position.y += velocityY.current * delta;
 
         // Ground collision
-        if (groupRef.current.position.y <= 0) {
-            groupRef.current.position.y = 0;
+        if (groupRef.current.position.y <= groundY) {
+            groupRef.current.position.y = groundY;
             velocityY.current = 0;
             isJumping.current = false;
         }
@@ -1251,7 +1644,7 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
         if(groupRef.current) {
             groupRef.current.rotation.x = 0;
             groupRef.current.rotation.z = 0;
-            groupRef.current.position.y = 0;
+            groupRef.current.position.y = groundY;
         }
         if(leftLeg.current) leftLeg.current.rotation.x = -Math.PI / 2;
         if(rightLeg.current) rightLeg.current.rotation.x = -Math.PI / 2;
@@ -1260,7 +1653,7 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
         if(groupRef.current) {
             groupRef.current.rotation.x = -Math.PI / 2; 
             groupRef.current.rotation.y = 0;
-            groupRef.current.position.y = 0;
+            groupRef.current.position.y = groundY;
         }
         if(leftLeg.current) leftLeg.current.rotation.x = 0;
         if(rightLeg.current) rightLeg.current.rotation.x = 0;
@@ -1270,7 +1663,7 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
         if(groupRef.current && !isJumping.current) {
             groupRef.current.rotation.x = 0;
             groupRef.current.rotation.z = 0;
-            groupRef.current.position.y = 0;
+            groupRef.current.position.y = groundY;
         }
     }
 
@@ -1317,6 +1710,35 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
     tex.needsUpdate = true;
     return tex;
   }, []);
+  const checkMarkShape = useMemo(() => {
+    const shape = new THREE.Shape();
+    // V-shaped check: left tail a bit longer, right tail longest
+    shape.moveTo(-0.36, 0.12);
+    shape.lineTo(-0.22, -0.14);
+    shape.lineTo(-0.12, -0.06);
+    shape.lineTo(0.34, -0.32);
+    shape.lineTo(0.46, -0.22);
+    shape.lineTo(-0.04, 0.24);
+    shape.lineTo(-0.26, 0.18);
+    shape.closePath();
+    return shape;
+  }, []);
+
+  const purpleGradientSkirtTexture = useMemo(() => {
+    const size = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d')!;
+    const grad = ctx.createLinearGradient(0, 0, 0, size);
+    grad.addColorStop(0, '#5b2bd9');
+    grad.addColorStop(1, '#7ecbff');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    return tex;
+  }, []);
   
   const getLegColor = () => {
     switch(avatar.outfit) {
@@ -1330,6 +1752,8 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
         case 'GREY_HOODIE': return '#2d3436';
         case 'YELLOW_RAINCOAT': return '#95a5a6';
         case 'PINK_BIKINI': return skinColor;
+        case 'SKY_BIKINI_SKIRT': return skinColor;
+        case 'PURPLE_BIKINI_GRADIENT_SKIRT': return skinColor;
         case 'BLACK_ONEPIECE': return skinColor;
         case 'BLACK_BOXERS': return skinColor; 
         case 'BLACK_RASHGUARD': return '#2d3436';
@@ -1357,12 +1781,59 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
                     <mesh position={[0, -0.25, 0]}><boxGeometry args={[shoulderWidth + 0.01, 0.1, torsoDepth + 0.01]} /><meshToonMaterial color="#ff69b4" /></mesh>
                 </group>
             );
+        case 'SKY_BIKINI_SKIRT':
+            return (
+                <group position={[0, bodyCenterY, 0]}>
+                    {/* Skin Torso */}
+                    <mesh><boxGeometry args={[shoulderWidth, torsoHeight, torsoDepth]} /><meshToonMaterial color={skinColor} /></mesh>
+                    {/* Bikini Top */}
+                    <mesh position={[0, 0.1, 0]}>
+                        <boxGeometry args={[shoulderWidth + 0.02, 0.15, torsoDepth + 0.04]} />
+                        <meshToonMaterial color="#7ecbff" />
+                    </mesh>
+                    {/* Bikini Bottom */}
+                    <mesh position={[0, -0.25, 0]}>
+                        <boxGeometry args={[shoulderWidth + 0.01, 0.1, torsoDepth + 0.01]} />
+                        <meshToonMaterial color="#7ecbff" />
+                    </mesh>
+                    {/* Skirt (fitted) */}
+                    <mesh position={[0, -0.22, 0]}>
+                        <boxGeometry args={[shoulderWidth + 0.02, 0.16, torsoDepth + 0.04]} />
+                        <meshToonMaterial color="#7ecbff" />
+                    </mesh>
+                </group>
+            );
+        case 'PURPLE_BIKINI_GRADIENT_SKIRT':
+            return (
+                <group position={[0, bodyCenterY, 0]}>
+                    {/* Skin Torso */}
+                    <mesh><boxGeometry args={[shoulderWidth, torsoHeight, torsoDepth]} /><meshToonMaterial color={skinColor} /></mesh>
+                    {/* Bikini Top */}
+                    <mesh position={[0, 0.1, 0]}>
+                        <boxGeometry args={[shoulderWidth + 0.02, 0.15, torsoDepth + 0.04]} />
+                        <meshToonMaterial color="#5b2bd9" />
+                    </mesh>
+                    {/* Bikini Bottom */}
+                    <mesh position={[0, -0.25, 0]}>
+                        <boxGeometry args={[shoulderWidth + 0.01, 0.1, torsoDepth + 0.01]} />
+                        <meshToonMaterial color="#5b2bd9" />
+                    </mesh>
+                    {/* Gradient Skirt (fitted) */}
+                    <mesh position={[0, -0.22, 0]}>
+                        <boxGeometry args={[shoulderWidth + 0.02, 0.16, torsoDepth + 0.04]} />
+                        <meshToonMaterial map={purpleGradientSkirtTexture} color="white" />
+                    </mesh>
+                </group>
+            );
         case 'BLACK_ONEPIECE':
             return (
                 <group position={[0, bodyCenterY, 0]}>
                     <mesh><boxGeometry args={[shoulderWidth, torsoHeight, torsoDepth]} /><meshToonMaterial color="#2d3436" /></mesh>
-                    {/* Nike Logo approximation */}
-                    <mesh position={[0.05, 0.1, 0.11]} rotation={[0,0,0.5]}><boxGeometry args={[0.08, 0.02, 0.01]} /><meshBasicMaterial color="white" /></mesh>
+                    {/* White check mark */}
+                    <mesh position={[0.03, 0.08, 0.12]} rotation={[0, 0, Math.PI - 0.2]} scale={[-0.28, 0.28, 0.28]}>
+                        <shapeGeometry args={[checkMarkShape]} />
+                        <meshBasicMaterial color="white" side={THREE.DoubleSide} />
+                    </mesh>
                     <mesh position={[0, -0.25, 0]}><boxGeometry args={[shoulderWidth + 0.01, 0.1, torsoDepth + 0.01]} /><meshToonMaterial color="#2d3436" /></mesh>
                 </group>
             );
@@ -1471,7 +1942,7 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
     }
   };
 
-  const isShorts = avatar.outfit === 'YELLOW_SHORTS' || avatar.outfit === 'BLACK_BOXERS' || avatar.outfit === 'PINK_BIKINI';
+  const isShorts = avatar.outfit === 'YELLOW_SHORTS' || avatar.outfit === 'BLACK_BOXERS' || avatar.outfit === 'PINK_BIKINI' || avatar.outfit === 'SKY_BIKINI_SKIRT' || avatar.outfit === 'PURPLE_BIKINI_GRADIENT_SKIRT';
   const torsoW = 0.36;
   const torsoH = 0.5;
   const torsoD = 0.22;
@@ -1515,14 +1986,18 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
         default: return skinColor;
       }
   };
-  const hairColor = avatar.hairstyle === 'SHORT' ? '#2d3436' : "#5e412f";
   const isBob = avatar.hairstyle === 'SHORT';
   const isLongHair = avatar.hairstyle === 'LONG';
-  const isPonytail = avatar.hairstyle === 'PONYTAIL';
+  const isPonytail = avatar.hairstyle === 'PONYTAIL' || avatar.hairstyle === 'PONYTAIL_PINK';
+  const isPonytailPink = avatar.hairstyle === 'PONYTAIL_PINK';
+  const isTopBun = avatar.hairstyle === 'BUN_GREEN';
+  const hairColor = isBob ? '#2d3436' : "#5e412f";
   const showRainHood = avatar.outfit === 'YELLOW_RAINCOAT';
 
+  const initialGroundY = getGroundY ? getGroundY(avatar.position[0], avatar.position[2]) : 0;
+
   return (
-    <group ref={groupRef} position={[avatar.position[0], 0, avatar.position[2]]}>
+    <group ref={groupRef} position={[avatar.position[0], (avatar.position[1] ?? 0) + initialGroundY, avatar.position[2]]}>
       <group position={[0, 0, 0]}>
         <group position={[0, hipY, 0]}>
            <group ref={leftLeg} position={[-legX, 0, 0]}>
@@ -1703,10 +2178,30 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
                     <meshToonMaterial color={hairColor} />
                 </mesh>
                 {isPonytail && (
-                    <mesh position={[0, 0.1, -0.28]} rotation={[0.4, 0, 0]}>
-                        <coneGeometry args={[0.1, 0.5]} />
-                        <meshToonMaterial color={hairColor} />
-                    </mesh>
+                    <group>
+                        <mesh position={[0, 0.1, -0.28]} rotation={[0.4, 0, 0]}>
+                            <coneGeometry args={[0.1, 0.5]} />
+                            <meshToonMaterial color={hairColor} />
+                        </mesh>
+                        {isPonytailPink && (
+                            <mesh position={[0, 0.14, -0.18]} rotation={[Math.PI / 2, 0, 0]}>
+                                <torusGeometry args={[0.06, 0.02, 10, 20]} />
+                                <meshStandardMaterial color="#ff7eb9" emissive="#ff9fd4" emissiveIntensity={0.4} />
+                            </mesh>
+                        )}
+                    </group>
+                )}
+                {isTopBun && (
+                    <group>
+                        <mesh position={[0, 0.23, -0.08]}>
+                            <sphereGeometry args={[0.16, 18, 18]} />
+                            <meshToonMaterial color={hairColor} />
+                        </mesh>
+                        <mesh position={[0, 0.2, -0.08]} rotation={[Math.PI / 2, 0, 0]}>
+                            <torusGeometry args={[0.08, 0.02, 10, 20]} />
+                            <meshStandardMaterial color="#2ecc71" emissive="#56e39f" emissiveIntensity={0.35} />
+                        </mesh>
+                    </group>
                 )}
                 {isLongHair && (
                     <mesh position={[0, -0.2, -0.1]}>
@@ -1730,35 +2225,27 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
                  </group>
               )}
               {!showRainHood && avatar.accessories.includes('HAT') && (
-                 <group position={[0, 0.1, 0.05]}>
-                   <mesh><sphereGeometry args={[0.245, 32, 32, 0, Math.PI*2, 0, 1.5]} /><meshToonMaterial color="#74b9ff" /></mesh>
-                   <mesh position={[0, 0, 0.2]} rotation={[0.2, 0, 0]}><boxGeometry args={[0.3, 0.02, 0.2]} /><meshToonMaterial color="#74b9ff" /></mesh>
+                 <group position={[0, 0.02, 0.02]}>
+                   <mesh><sphereGeometry args={[0.235, 32, 32, 0, Math.PI*2, 0, 1.5]} /><meshToonMaterial color="#74b9ff" /></mesh>
+                   <mesh position={[0, -0.02, 0.18]} rotation={[0.2, 0, 0]}><boxGeometry args={[0.28, 0.02, 0.18]} /><meshToonMaterial color="#74b9ff" /></mesh>
                  </group>
               )}
                {(avatar.accessories.includes('HEADSET') || avatar.accessories.includes('HEADSET_WHITE')) && (
-                 <group position={[0, 0.05, 0]}>
-                    <mesh position={[0.24, 0, 0]}><boxGeometry args={[0.05, 0.15, 0.15]} /><meshStandardMaterial color="white" /></mesh>
-                    <mesh position={[-0.24, 0, 0]}><boxGeometry args={[0.05, 0.15, 0.15]} /><meshStandardMaterial color="white" /></mesh>
-                    <mesh position={[0, 0.15, 0]} rotation={[0,0,0]}><torusGeometry args={[0.25, 0.02, 8, 16, Math.PI]} /><meshStandardMaterial color="white" /></mesh>
+                 <group position={[0, -0.02, 0.05]}>
+                    <mesh position={[0.25, -0.01, 0.05]}><boxGeometry args={[0.06, 0.18, 0.16]} /><meshStandardMaterial color="white" /></mesh>
+                    <mesh position={[-0.25, -0.01, 0.05]}><boxGeometry args={[0.06, 0.18, 0.16]} /><meshStandardMaterial color="white" /></mesh>
+                    <mesh position={[0, 0.06, 0.03]} rotation={[0,0,0]}><torusGeometry args={[0.26, 0.03, 8, 16, Math.PI]} /><meshStandardMaterial color="white" /></mesh>
                  </group>
               )}
                {avatar.accessories.includes('EARRINGS') && (
                  <group>
-                    <mesh position={[0.36, -0.08, 0.12]}>
-                        <sphereGeometry args={[0.04]} />
-                        <meshStandardMaterial color="#ffd700" emissive="#f6e58d" emissiveIntensity={0.2} />
+                    <mesh position={[0.22, -0.07, 0.06]}>
+                        <torusGeometry args={[0.03, 0.005, 8, 16]} />
+                        <meshStandardMaterial color="#c9a227" />
                     </mesh>
-                    <mesh position={[-0.36, -0.08, 0.12]}>
-                        <sphereGeometry args={[0.04]} />
-                        <meshStandardMaterial color="#ffd700" emissive="#f6e58d" emissiveIntensity={0.2} />
-                    </mesh>
-                    <mesh position={[0.36, -0.02, 0.12]}>
-                        <cylinderGeometry args={[0.015, 0.015, 0.08]} />
-                        <meshStandardMaterial color="#f1c40f" />
-                    </mesh>
-                    <mesh position={[-0.36, -0.02, 0.12]}>
-                        <cylinderGeometry args={[0.015, 0.015, 0.08]} />
-                        <meshStandardMaterial color="#f1c40f" />
+                    <mesh position={[-0.22, -0.07, 0.06]}>
+                        <torusGeometry args={[0.03, 0.005, 8, 16]} />
+                        <meshStandardMaterial color="#c9a227" />
                     </mesh>
                  </group>
               )}
@@ -1780,14 +2267,16 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
   );
 };
 
-const TentMesh = ({ gameState }: { gameState: GameState }) => {
-    const { type, pattern, isLit, isDoorOpen, rug } = gameState.tent;
+const TentMesh = ({ tent }: { tent: TentState }) => {
+    const { type, pattern, isLit, isDoorOpen, rug, size } = tent;
+    const tentOpacity = 0.75;
+    const sizeScale = size === 'SMALL' ? 0.8 : (size === 'LARGE' ? 1.2 : 1);
     
     // Create texture only when pattern changes
     const texture = useMemo(() => createPatternTexture(pattern), [pattern]);
     
     return (
-        <group>
+        <group scale={[sizeScale, sizeScale, sizeScale]}>
             {/* Tent Base Structure */}
             {type === 'TRIANGLE' ? (
                 // DOME STYLE (Replaces Triangle)
@@ -1796,7 +2285,13 @@ const TentMesh = ({ gameState }: { gameState: GameState }) => {
                     <mesh position={[0, 0, 0]} castShadow receiveShadow>
                         {/* Half Sphere */}
                         <sphereGeometry args={[1.5, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
-                        <meshStandardMaterial map={texture} color={pattern === 'ORANGE' ? '#e67e22' : 'white'} side={THREE.DoubleSide} />
+                        <meshStandardMaterial
+                            map={texture}
+                            color={getPatternBaseColor(pattern)}
+                            side={THREE.DoubleSide}
+                            transparent
+                            opacity={tentOpacity}
+                        />
                     </mesh>
                     
                     {/* Frame/Poles */}
@@ -1815,7 +2310,13 @@ const TentMesh = ({ gameState }: { gameState: GameState }) => {
                             // Closed Flap
                             <mesh position={[0, 0.7, -0.1]} rotation={[0,0,0]}>
                                 <planeGeometry args={[1.2, 1.4]} />
-                                <meshStandardMaterial map={texture} color={pattern === 'ORANGE' ? '#d35400' : '#bdc3c7'} side={THREE.DoubleSide} />
+                                <meshStandardMaterial
+                                    map={texture}
+                                    color={pattern === 'KHAKI_OUTDOOR' ? '#9d8b6c' : (pattern === 'YELLOW_STARS' ? '#ffffff' : (pattern === 'ORANGE' ? '#d35400' : '#bdc3c7'))}
+                                    side={THREE.DoubleSide}
+                                    transparent
+                                    opacity={tentOpacity}
+                                />
                             </mesh>
                         )}
                         {isDoorOpen && (
@@ -1823,7 +2324,11 @@ const TentMesh = ({ gameState }: { gameState: GameState }) => {
                             <group position={[0, 1.3, -0.1]}>
                                 <mesh rotation={[0, 0, Math.PI/2]}>
                                     <cylinderGeometry args={[0.1, 0.1, 1.2]} />
-                                    <meshStandardMaterial color={pattern === 'ORANGE' ? '#d35400' : '#bdc3c7'} />
+                                    <meshStandardMaterial
+                                        color={pattern === 'KHAKI_OUTDOOR' ? '#9d8b6c' : (pattern === 'YELLOW_STARS' ? '#f0b90b' : (pattern === 'ORANGE' ? '#d35400' : '#bdc3c7'))}
+                                        transparent
+                                        opacity={tentOpacity}
+                                    />
                                 </mesh>
                             </group>
                         )}
@@ -1834,7 +2339,13 @@ const TentMesh = ({ gameState }: { gameState: GameState }) => {
                      {/* Cabin Style */}
                     <mesh position={[0, 1, 0]} castShadow receiveShadow>
                         <boxGeometry args={[2.5, 2, 2.5]} />
-                         <meshStandardMaterial map={texture} color={pattern === 'ORANGE' ? '#e67e22' : 'white'} transparent opacity={0.9} side={THREE.DoubleSide} />
+                         <meshStandardMaterial
+                            map={texture}
+                            color={pattern === 'ORANGE' ? '#e67e22' : 'white'}
+                            transparent
+                            opacity={tentOpacity}
+                            side={THREE.DoubleSide}
+                         />
                     </mesh>
                     <mesh position={[0, 2.3, 0]} rotation={[0, Math.PI/4, 0]}>
                         <coneGeometry args={[2.2, 1, 4]} />
@@ -1862,7 +2373,17 @@ const TentMesh = ({ gameState }: { gameState: GameState }) => {
 
             {/* Interior Light */}
             {isLit && (
-                <pointLight position={[0, 1.2, 0]} intensity={3} distance={6} color="#ffeaa7" decay={2} />
+                <group>
+                    <pointLight position={[0, 1.25, 0]} intensity={1.6} distance={5} color="#ffe7b3" decay={2} />
+                    <mesh position={[0, 1.25, 0]}>
+                        <sphereGeometry args={[0.08, 16, 16]} />
+                        <meshStandardMaterial color="#fff3c4" emissive="#ffe7b3" emissiveIntensity={1.2} />
+                    </mesh>
+                    <mesh position={[0, 1.35, 0]}>
+                        <cylinderGeometry args={[0.05, 0.05, 0.08, 12]} />
+                        <meshStandardMaterial color="#6c5c4c" />
+                    </mesh>
+                </group>
             )}
 
             {/* Rug */}
@@ -1873,18 +2394,6 @@ const TentMesh = ({ gameState }: { gameState: GameState }) => {
                 {rug === 'VINTAGE' && <mesh rotation={[-Math.PI/2, 0, 0]}><planeGeometry args={[1.8, 1.8]} /><meshStandardMaterial color="#d63031" /></mesh>}
             </group>
             
-            {/* Interior Decor */}
-             <group>
-                 {/* Sleeping Bag */}
-                 <mesh position={[-0.6, 0.1, -0.4]} rotation={[0, 0.2, 0]}>
-                     <boxGeometry args={[0.7, 0.1, 1.6]} />
-                     <meshStandardMaterial color="#fab1a0" />
-                 </mesh>
-                 <mesh position={[-0.6, 0.15, -1.1]} rotation={[0, 0.2, 0]}>
-                     <cylinderGeometry args={[0.2, 0.2, 0.6]} rotation={[0,0,Math.PI/2]} />
-                     <meshStandardMaterial color="white" />
-                 </mesh>
-             </group>
         </group>
     );
 };
@@ -1963,11 +2472,11 @@ const DraggableObject = ({ id, position, rotation, isSelected, onSelect, onMove,
     );
 };
 
-const Pet = ({ pet, isSelected, onSelect, onMove, isEditMode, onInteract, greetingText, onCloseGreeting }: any) => {
+const Pet = ({ pet, position, isSelected, onSelect, onMove, isEditMode, onInteract, greetingText, onCloseGreeting }: any) => {
     return (
         <DraggableObject
             id={pet.id}
-            position={pet.position}
+            position={position ?? pet.position}
             rotation={pet.rotation}
             isSelected={isSelected}
             onSelect={onSelect}
@@ -2003,7 +2512,7 @@ const MoveMarker = ({ position }: { position: [number, number, number] }) => {
     });
 
     return (
-        <mesh ref={ringRef} position={[position[0], 0.02, position[2]]} rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh ref={ringRef} position={[position[0], position[1] + 0.02, position[2]]} rotation={[-Math.PI / 2, 0, 0]}>
             <ringGeometry args={[0.2, 0.35, 32]} />
             <meshBasicMaterial color="white" transparent opacity={0.4} />
         </mesh>
@@ -2368,9 +2877,10 @@ const GameCanvas = ({
         const z = Math.round(target.z * 2) / 2;
         setSelectedItemId(null);
         setActionMenu(null);
-        if (gameState.avatar.pose !== 'IDLE') {
+        if (gameState.avatar.pose !== 'IDLE' || gameState.cameraMode === 'TENT_INTERIOR') {
             setGameState((prev: GameState) => ({
                 ...prev,
+                cameraMode: 'ISLAND',
                 avatar: { ...prev.avatar, pose: 'IDLE' }
             }));
         }
@@ -2459,23 +2969,34 @@ const GameCanvas = ({
         }
     }, [openActionMenu]);
 
-    const handleTentInteract = useCallback(() => {
-        openActionMenu({ id: 'tent', type: 'tent', position: gameState.tent.position });
-    }, [gameState.tent.position, openActionMenu]);
+    const handleTentInteract = useCallback((tent: TentState) => {
+        openActionMenu({ id: tent.id, type: 'tent', position: tent.position });
+    }, [openActionMenu]);
 
-    const applyActionPose = useCallback((pose: 'IDLE' | 'SIT' | 'LIE', position: [number, number, number], opts?: { openTent?: boolean }) => {
+    const applyActionPose = useCallback((pose: 'IDLE' | 'SIT' | 'LIE', position: [number, number, number], opts?: { openTent?: boolean; tentId?: string }) => {
         lastUserInteractRef.current = Date.now();
         setMoveTarget(null);
         setActionMenu(null);
         setSelectedItemId(null);
         setGameState((prev: GameState) => {
-            const nextTent = opts?.openTent ? { ...prev.tent, isDoorOpen: true } : prev.tent;
+            const targetTent = opts?.tentId ? prev.tents.find(tent => tent.id === opts.tentId) : null;
+            const nextTents = opts?.openTent && targetTent
+                ? prev.tents.map(tent => tent.id === targetTent.id ? { ...tent, isDoorOpen: true } : tent)
+                : prev.tents;
+            const nextCameraMode = opts?.openTent ? 'TENT_INTERIOR' : 'ISLAND';
+            const tentScale = targetTent ? getTentScale(targetTent.size) : 1;
+            const poseOffset = pose === 'LIE' ? 0.95 : (pose === 'SIT' ? 0.6 : 0.45);
+            const interiorOffset = poseOffset * tentScale;
+            const targetPosition: [number, number, number] = opts?.openTent
+                ? [targetTent?.position[0] ?? position[0], 0, (targetTent?.position[2] ?? position[2]) - interiorOffset]
+                : [position[0], 0, position[2]];
             return {
                 ...prev,
-                tent: nextTent,
+                tents: nextTents,
+                cameraMode: nextCameraMode,
                 avatar: {
                     ...prev.avatar,
-                    position: [position[0], 0, position[2]],
+                    position: targetPosition,
                     pose
                 }
             };
@@ -2530,9 +3051,6 @@ const GameCanvas = ({
 
     // Determine Ground Color based on FloorType or Weather override
     const getGroundColor = () => {
-        // Weather Overrides
-        if (gameState.weather === WeatherType.SNOWY) return "#f1f2f6"; 
-        
         // Floor Type Selection
         switch(gameState.floor) {
             case FloorType.GRASS: 
@@ -2549,7 +3067,7 @@ const GameCanvas = ({
 
     const bgColor = getSkyColor();
     const groundColor = getGroundColor();
-    const isSand = gameState.floor === FloorType.SAND && gameState.weather !== WeatherType.SNOWY;
+    const isSand = gameState.floor === FloorType.SAND;
     const waterStyle = useMemo(() => {
         if (waterTheme === WaterTheme.EMERALD) {
             return {
@@ -2588,6 +3106,9 @@ const GameCanvas = ({
             picnic_table_small: 0.8,
             campfire: 0.6,
             lantern: 0.4,
+            wood_lamp: 0.6,
+            candle: 0.3,
+            flashlight: 0.3,
             pond: 1.1,
             teddy_bear: 0.4,
             books: 0.4,
@@ -2611,24 +3132,21 @@ const GameCanvas = ({
                 position: item.position,
                 radius: radiusMap[item.itemId] ?? 0.6
             }));
+        const tents = gameState.tents.map(tent => ({
+            position: tent.position,
+            radius: getTentRadius(tent.size)
+        }));
         return [
             ...items,
-            { position: gameState.tent.position, radius: 1.6 }
+            ...tents
         ];
-    }, [gameState.placedItems, gameState.tent.position]);
+    }, [gameState.placedItems, gameState.tents]);
     const islandSideColor = useMemo(() => {
         const base = new THREE.Color(groundColor);
         const factor = isNight ? 0.88 : 0.75;
         base.multiplyScalar(factor);
         return `#${base.getHexString()}`;
     }, [groundColor, isNight]);
-    const islandTopY = 0;
-    const islandHeight = 0.6;
-    const islandCenterHeight = 1.3;
-    const islandEdgeHeight = 0.8;
-    const islandCenterRadius = 0.6;
-    const islandEdgeRadius = 0.9;
-    const islandEdgeYOffset = islandEdgeHeight - islandCenterHeight;
     const islandGeometry = useMemo(() => {
         const geometry = new THREE.CircleGeometry(ISLAND_RADIUS, 96);
         geometry.rotateX(-Math.PI / 2);
@@ -2638,14 +3156,14 @@ const GameCanvas = ({
             const z = pos.getZ(i);
             const r = Math.sqrt(x * x + z * z);
             const t = Math.min(r / ISLAND_RADIUS, 1);
-            const blend = THREE.MathUtils.smoothstep(t, islandCenterRadius, islandEdgeRadius);
-            const y = islandEdgeYOffset * blend;
+            const blend = THREE.MathUtils.smoothstep(t, ISLAND_CENTER_RADIUS, ISLAND_EDGE_RADIUS);
+            const y = ISLAND_EDGE_Y_OFFSET * blend;
             pos.setY(i, y);
         }
         pos.needsUpdate = true;
         geometry.computeVertexNormals();
         return geometry;
-    }, [islandEdgeYOffset, islandCenterRadius, islandEdgeRadius]);
+    }, []);
 
     const getLighting = () => {
         let ambInt = 0.6;
@@ -2705,7 +3223,7 @@ const GameCanvas = ({
         }
         return {
             options: [
-                { label: '들어가서 쉬기', onSelect: () => applyActionPose('LIE', actionMenu.position, { openTent: true }) }
+                { label: '들어가서 쉬기', onSelect: () => applyActionPose('LIE', actionMenu.position, { openTent: true, tentId: actionMenu.id }) }
             ],
             yOffset: actionMenuOffsets.tent
         };
@@ -2739,19 +3257,15 @@ const GameCanvas = ({
                        </>
                     )}
 
-                    {gameState.weather === WeatherType.RAINY && (
-                        <Cloud opacity={0.7} speed={0.3} bounds={[40, 4, 10]} segments={40} color="white" position={[0, 10, 0]} seed={cloudSeeds[3]} />
-                    )}
-                    
                     {gameState.weather === WeatherType.RAINY && <Rain />}
                     {gameState.weather === WeatherType.SNOWY && <Snow />}
 
                     <mesh
-                        position={[0, islandTopY + islandEdgeYOffset - islandHeight / 2, 0]}
+                        position={[0, ISLAND_TOP_Y + ISLAND_EDGE_Y_OFFSET - ISLAND_HEIGHT / 2, 0]}
                         castShadow
                         receiveShadow
                     >
-                        <cylinderGeometry args={[ISLAND_RADIUS * 1.01, ISLAND_RADIUS * 0.86, islandHeight, 72, 1, true]} />
+                        <cylinderGeometry args={[ISLAND_RADIUS * 1.01, ISLAND_RADIUS * 0.86, ISLAND_HEIGHT, 72, 1, true]} />
                         <meshStandardMaterial
                             color={islandSideColor}
                             roughness={0.9}
@@ -2760,7 +3274,7 @@ const GameCanvas = ({
                     </mesh>
                     <mesh 
                         receiveShadow 
-                        position={[0, islandTopY, 0]} 
+                        position={[0, ISLAND_TOP_Y, 0]} 
                         onPointerDown={handleGroundPointerDown}
                         onPointerMove={handleGroundPointerMove}
                         onPointerUp={handleGroundPointerUp}
@@ -2790,18 +3304,21 @@ const GameCanvas = ({
                         <Grid position={[0, 0.01, 0]} args={[40, 40]} cellColor={isNight ? "#444" : "white"} sectionColor={isNight ? "#666" : "white"} fadeDistance={25} opacity={0.3} />
                     )}
 
-                    <DraggableObject
-                        id="tent"
-                        position={gameState.tent.position}
-                        rotation={[0, 0, 0]}
-                        isSelected={selectedItemId === 'tent'}
-                        onSelect={setSelectedItemId}
-                        onMove={(_, pos) => onMoveTent(pos)}
-                        onInteract={handleTentInteract}
-                        isEditMode={isEditMode}
-                    >
-                        <TentMesh gameState={gameState} />
-                    </DraggableObject>
+                    {gameState.tents.map(tent => (
+                        <DraggableObject
+                            key={tent.id}
+                            id={tent.id}
+                            position={getGroundedPosition(tent.position)}
+                            rotation={[0, 0, 0]}
+                            isSelected={selectedItemId === tent.id}
+                            onSelect={setSelectedItemId}
+                            onMove={(id, pos) => onMoveTent(id, pos)}
+                            onInteract={() => handleTentInteract(tent)}
+                            isEditMode={isEditMode}
+                        >
+                            <TentMesh tent={tent} />
+                        </DraggableObject>
+                    ))}
 
                     <Player 
                         avatar={gameState.avatar} 
@@ -2809,13 +3326,14 @@ const GameCanvas = ({
                         moveTarget={isEditMode ? null : moveTarget}
                         setMoveTarget={setMoveTarget}
                         obstacles={obstacleData}
+                        getGroundY={getIslandSurfaceY}
                     />
 
                     {gameState.partners.map(partner => (
                         <DraggableObject 
                             key={partner.id}
                             id={partner.id} 
-                            position={partner.position} 
+                            position={getGroundedPosition(partner.position)} 
                             rotation={partner.rotation}
                             isSelected={selectedItemId === partner.id} 
                             onSelect={setSelectedItemId} 
@@ -2829,6 +3347,7 @@ const GameCanvas = ({
                                 avatar={partner} 
                                 playerRef={{ current: null } as any} 
                                 isPartner={true} 
+                                getGroundY={getIslandSurfaceY}
                             />
                         </DraggableObject>
                     ))}
@@ -2837,7 +3356,7 @@ const GameCanvas = ({
                         <DraggableObject 
                             key={item.id} 
                             id={item.id} 
-                            position={item.position} 
+                            position={getGroundedPosition(item.position, getItemGroundOffset(item.itemId))} 
                             rotation={item.rotation}
                             isSelected={selectedItemId === item.id} 
                             onSelect={setSelectedItemId} 
@@ -2878,6 +3397,9 @@ const GameCanvas = ({
 
                             {item.itemId === 'campfire' && <Campfire />}
                             {item.itemId === 'lantern' && <CampingLantern />}
+                            {item.itemId === 'wood_lamp' && <WoodenStreetLamp />}
+                            {item.itemId === 'candle' && <Candle />}
+                            {item.itemId === 'flashlight' && <Flashlight />}
                             {item.itemId === 'camping_chair' && <CampingChair />}
                             {item.itemId === 'camping_table' && <CampingTable />}
                             {item.itemId === 'picnic_table_small' && <SmallPicnicTable />}
@@ -2887,6 +3409,10 @@ const GameCanvas = ({
                             {item.itemId === 'pond' && <Pond />}
                             {item.itemId === 'pot' && <CookingPot />}
                             {item.itemId === 'coffee_pot' && <CoffeePot />}
+                            {item.itemId === 'camping_burner' && <CampingBurner />}
+                            {item.itemId === 'ramen_pot' && <RamenPot />}
+                            {item.itemId === 'spoon_chopsticks' && <SpoonChopsticksSet />}
+                            {item.itemId === 'choco_cookie' && <ChocoCookie />}
                             {item.itemId === 'marshmallow' && <Marshmallow />}
                             {item.itemId === 'camping_box' && <BoxItem />}
                             {item.itemId === 'laptop' && <Laptop />}
@@ -2900,6 +3426,7 @@ const GameCanvas = ({
                         <Pet 
                             key={pet.id} 
                             pet={pet} 
+                            position={getGroundedPosition(pet.position, PET_GROUND_OFFSET)}
                             isSelected={selectedItemId === pet.id} 
                             onSelect={setSelectedItemId} 
                             onMove={onMovePet} 
@@ -2912,16 +3439,27 @@ const GameCanvas = ({
 
                     {actionMenu && actionMenuConfig && (
                         <ActionMenu
-                            position={actionMenu.position}
+                            position={getGroundedPosition(actionMenu.position)}
                             options={actionMenuConfig.options}
                             yOffset={actionMenuConfig.yOffset}
                         />
                     )}
 
-                    {!isEditMode && moveTarget && <MoveMarker position={moveTarget} />}
+                    {!isEditMode && moveTarget && <MoveMarker position={getGroundedPosition(moveTarget)} />}
 
-                    <CameraController playerRef={playerRef} controlsRef={controlsRef} />
-                    <OrbitControls ref={controlsRef} enablePan={false} maxPolarAngle={Math.PI / 2 - 0.1} minDistance={5} maxDistance={isMobile ? 30 : 24} />
+                    <CameraController playerRef={playerRef} controlsRef={controlsRef} isEditMode={isEditMode} />
+                    <OrbitControls 
+                        ref={controlsRef} 
+                        enablePan={false} 
+                        enableRotate={!isEditMode}
+                        enableZoom={true}
+                        autoRotate={false}
+                        rotateSpeed={isEditMode ? 0 : 1}
+                        zoomSpeed={isEditMode ? 0.3 : 1}
+                        maxPolarAngle={Math.PI / 2 - 0.1} 
+                        minDistance={5} 
+                        maxDistance={isMobile ? 30 : 24} 
+                    />
                 </Canvas>
             </KeyboardControls>
         </div>

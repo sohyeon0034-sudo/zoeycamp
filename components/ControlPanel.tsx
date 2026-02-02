@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GameState, WeatherType, TimeOfDay, GameItem, ItemBlueprint, PetState, AvatarState, ItemCategory, FloorType, WaterTheme } from '../types';
+import { GameState, WeatherType, TimeOfDay, GameItem, ItemBlueprint, PetState, AvatarState, ItemCategory, FloorType, WaterTheme, TentState, TentSize } from '../types';
 import { 
     AVAILABLE_ITEMS, 
     AVATAR_OUTFITS, AVATAR_SHOES, AVATAR_HAIRSTYLES, AVATAR_ACCESSORIES, AVATAR_BLUSH, 
     PARTNER_OUTFITS, PARTNER_SHOES, PARTNER_HAIRSTYLES, PARTNER_ACCESSORIES,
     PET_TYPES, TENT_PATTERNS, RUG_OPTIONS, FLOOR_OPTIONS
 } from '../constants';
-import { Sun, Package, User, Tent, Triangle, Box, Trash2, RotateCcw, RotateCw, X, Armchair, Heart, Users, CloudRain, CloudSnow, Moon, Sunrise, Sunset, ChevronDown, ChevronUp, Cat, Plus, Flower, Layers } from 'lucide-react';
 import * as THREE from 'three';
 
 interface ControlPanelProps {
@@ -18,6 +17,7 @@ interface ControlPanelProps {
   onRotateItem: (id: string, angleDelta: number) => void;
   isEditMode: boolean;
   setIsEditMode: (value: boolean) => void;
+  panelMode?: 'FULL' | 'WEATHER';
 }
 
 const WATER_THEME_OPTIONS = [
@@ -30,6 +30,11 @@ const SKIN_TONE_OPTIONS = [
   { id: 'TONE3', name: '3', color: '#d79a7a' },
   { id: 'TONE4', name: '4', color: '#b87958' }
 ];
+const TENT_SIZE_OPTIONS: { id: TentSize; name: string; short: string }[] = [
+  { id: 'SMALL', name: 'Small', short: 'S' },
+  { id: 'MEDIUM', name: 'Medium', short: 'M' },
+  { id: 'LARGE', name: 'Large', short: 'L' }
+];
 
 const ControlPanel: React.FC<ControlPanelProps> = ({ 
   gameState, 
@@ -39,11 +44,14 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   onRemoveItem,
   onRotateItem,
   isEditMode,
-  setIsEditMode
+  setIsEditMode,
+  panelMode = 'FULL'
 }) => {
-  const [activeTab, setActiveTab] = useState<'ENV' | 'YOU' | 'FRIEND' | 'PETS' | 'DECOR' | 'TENT' | 'NATURE'>('ENV');
-  const [isMinimized, setIsMinimized] = useState(true);
+  const [activeTab, setActiveTab] = useState<'ENV' | 'YOU' | 'FRIEND' | 'PETS' | 'DECOR' | 'TENT' | 'NATURE'>(panelMode === 'WEATHER' ? 'ENV' : 'YOU');
+  const [isMinimized, setIsMinimized] = useState(false);
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
+  const [selectedTentId, setSelectedTentId] = useState<string | null>(null);
+  const isWeatherOnly = panelMode === 'WEATHER';
 
   // If an item/pet is selected, we want to show the Edit Interface, overriding normal tabs
   const selectedItem = gameState.placedItems.find(i => i.id === selectedItemId);
@@ -51,10 +59,14 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   // Check if partner is selected (using 'friend_' prefix)
   const isPartnerSelected = selectedItemId?.startsWith('friend_');
   const selectedPartner = gameState.partners.find(p => p.id === selectedItemId);
+  const selectedTentFromSelection = selectedItemId && gameState.tents.some(t => t.id === selectedItemId) ? selectedItemId : null;
+  const activeTentId = selectedTentFromSelection ?? selectedTentId ?? gameState.tents[0]?.id;
+  const activeTent = gameState.tents.find(t => t.id === activeTentId);
 
   const prevEditModeRef = useRef(isEditMode);
 
   useEffect(() => {
+    if (isWeatherOnly) return;
     const prev = prevEditModeRef.current;
     if (isEditMode && !prev) {
       setIsMinimized(false);
@@ -64,12 +76,33 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
       if (selectedItemId) setSelectedItemId(null);
     }
     prevEditModeRef.current = isEditMode;
-  }, [isEditMode, selectedItemId, setSelectedItemId]);
+  }, [isEditMode, selectedItemId, setSelectedItemId, isWeatherOnly]);
+
+  useEffect(() => {
+    if (isWeatherOnly) {
+      if (activeTab !== 'ENV') setActiveTab('ENV');
+      setIsMinimized(false);
+      return;
+    }
+    if (activeTab === 'ENV') setActiveTab('YOU');
+  }, [isWeatherOnly, activeTab]);
+
+  useEffect(() => {
+    if (selectedTentFromSelection) {
+      setSelectedTentId(selectedTentFromSelection);
+    }
+  }, [selectedTentFromSelection]);
+
+  useEffect(() => {
+    if (!selectedTentId && gameState.tents[0]) {
+      setSelectedTentId(gameState.tents[0].id);
+    }
+  }, [gameState.tents, selectedTentId]);
 
   const handleTogglePanel = () => {
     const next = !isMinimized;
     setIsMinimized(next);
-    if (!next) {
+    if (!next && !isWeatherOnly) {
       setIsEditMode(true);
     }
   };
@@ -97,6 +130,46 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
     setSelectedItemId(newItem.id); 
   };
 
+  const updateTent = (updates: Partial<TentState>) => {
+    if (!activeTentId) return;
+    setGameState(prev => ({
+      ...prev,
+      tents: prev.tents.map(tent => tent.id === activeTentId ? { ...tent, ...updates } : tent)
+    }));
+  };
+
+  const addTent = () => {
+    const newTent: TentState = {
+      id: `tent_${Date.now()}`,
+      type: 'TRIANGLE',
+      size: 'MEDIUM',
+      pattern: 'ORANGE',
+      rug: 'ETHNIC',
+      isLit: false,
+      isDoorOpen: true,
+      position: [(Math.random() - 0.5) * 6, 0, (Math.random() - 0.5) * 6]
+    };
+    setGameState(prev => ({
+      ...prev,
+      tents: [...prev.tents, newTent]
+    }));
+    setSelectedTentId(newTent.id);
+    setSelectedItemId(newTent.id);
+  };
+
+  const removeTent = (id: string) => {
+    const remaining = gameState.tents.filter(tent => tent.id !== id);
+    if (remaining.length === 0) return;
+    setGameState(prev => ({
+      ...prev,
+      tents: prev.tents.filter(tent => tent.id !== id)
+    }));
+    const nextId = remaining[0]?.id ?? null;
+    setSelectedTentId(nextId);
+    const nextSelectedItemId = selectedItemId === id ? nextId : selectedItemId;
+    setSelectedItemId(nextSelectedItemId);
+  };
+
   const addPet = (type: string, icon: string) => {
       const newPet: PetState = {
           id: Math.random().toString(36).substr(2, 9),
@@ -122,7 +195,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           id: `friend_${Date.now()}`,
           gender: gender,
           skinTone: 'TONE1',
-          outfit: gender === 'MALE' ? 'BLACK_SUIT' : 'JEANS_BLOUSE',
+          outfit: gender === 'MALE' ? 'BLACK_SUIT' : 'SKY_BIKINI_SKIRT',
           shoes: gender === 'MALE' ? 'BLACK_SNEAKERS_M' : 'RED_CANVAS',
           hairstyle: gender === 'MALE' ? 'SHORT' : 'LONG',
           blush: 'NONE',
@@ -207,6 +280,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           } else {
               return {
                   ...prev,
+                  cameraMode: 'ISLAND',
                   avatar: {
                       ...prev.avatar,
                       pose: nextPose,
@@ -244,7 +318,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                EDIT {isPet ? 'PET' : (isFriend ? 'FRIEND' : 'ITEM')}
             </h2>
             <button onClick={() => setSelectedItemId(null)} className="text-orange-300 hover:text-orange-500">
-               <X size={18} />
+               <span className="text-lg">✅</span>
             </button>
           </div>
 
@@ -265,14 +339,14 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                       className="p-2 bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-blue-500 shadow-sm active:scale-95 transition-all"
                       title="Rotate Left"
                   >
-                      <RotateCcw size={18} />
+                      <span className="text-lg">↺</span>
                   </button>
                   <button 
                       onClick={() => onRotateItem(selectedItemId!, Math.PI / 4)}
                       className="p-2 bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-blue-500 shadow-sm active:scale-95 transition-all"
                       title="Rotate Right"
                   >
-                      <RotateCw size={18} />
+                      <span className="text-lg">↻</span>
                   </button>
                   <div className="w-px bg-slate-200 mx-1"></div>
 
@@ -280,7 +354,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                     onClick={() => isFriend ? removeFriend(selectedItemId!) : onRemoveItem(selectedItemId!)}
                     className="flex-1 py-2 bg-red-50 border border-red-100 text-red-500 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-100 hover:scale-105 active:scale-95 transition-all shadow-sm"
                   >
-                    <Trash2 size={16} /> {isPet ? 'Send Home' : (isFriend ? 'Dismiss' : 'Delete')}
+                    <span className="text-base">🗑️</span> {isPet ? 'Send Home' : (isFriend ? 'Dismiss' : 'Delete')}
                   </button>
               </div>
           </div>
@@ -318,14 +392,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
       return (
         <div className="space-y-6 animate-pop">
-            <button 
-                onClick={() => togglePose(targetFriendId)}
-                className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 font-bold transition-all mb-4 ${target.pose !== 'IDLE' ? 'bg-orange-100 text-orange-600 border-2 border-orange-200' : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'}`}
-            >
-                <Armchair size={20} />
-                {target.pose === 'IDLE' ? "Sit Down" : (target.pose === 'SIT' ? "Lie Down" : "Stand Up")}
-            </button>
-
             <div>
               <span className="text-[10px] font-bold text-slate-400 block mb-2">Outfit</span>
               <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
@@ -363,6 +429,40 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             </div>
 
             <div>
+              <span className="text-[10px] font-bold text-slate-400 block mb-2">Accessories</span>
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                {accessories.map(a => (
+                  <button
+                    key={a.id}
+                    onClick={() => toggleAccessory(a.id, targetFriendId)}
+                    className={`w-10 h-10 bg-white rounded-lg flex items-center justify-center text-lg shrink-0 border border-slate-100 transition-all ${target.accessories.includes(a.id) ? 'bg-purple-50 ring-2 ring-purple-300' : 'opacity-70'}`}
+                    title={a.name}
+                  >
+                    {a.icon}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {!isMale && (
+             <div>
+              <span className="text-[10px] font-bold text-slate-400 block mb-2">Cheeks</span>
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                {AVATAR_BLUSH.map(b => (
+                  <button
+                    key={b.id}
+                    onClick={() => updateTarget({ blush: b.id })}
+                    className={`px-3 py-2 bg-white rounded-lg flex flex-col items-center justify-center shrink-0 border border-slate-100 ${target.blush === b.id ? 'ring-2 ring-red-300 bg-red-50' : ''}`}
+                  >
+                    <span className="text-lg">{b.icon}</span>
+                    <span className="text-[9px] text-slate-500 font-bold">{b.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            )}
+
+            <div>
               <span className="text-[10px] font-bold text-slate-400 block mb-2">Hair</span>
               <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                 {hairstyles.map(h => (
@@ -394,40 +494,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                 ))}
               </div>
             </div>
-
-            {!isMale && (
-             <div>
-              <span className="text-[10px] font-bold text-slate-400 block mb-2">Cheeks</span>
-              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                {AVATAR_BLUSH.map(b => (
-                  <button
-                    key={b.id}
-                    onClick={() => updateTarget({ blush: b.id })}
-                    className={`px-3 py-2 bg-white rounded-lg flex flex-col items-center justify-center shrink-0 border border-slate-100 ${target.blush === b.id ? 'ring-2 ring-red-300 bg-red-50' : ''}`}
-                  >
-                    <span className="text-lg">{b.icon}</span>
-                    <span className="text-[9px] text-slate-500 font-bold">{b.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            )}
-
-            <div>
-              <span className="text-[10px] font-bold text-slate-400 block mb-2">Accessories</span>
-              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                {accessories.map(a => (
-                  <button
-                    key={a.id}
-                    onClick={() => toggleAccessory(a.id, targetFriendId)}
-                    className={`w-10 h-10 bg-white rounded-lg flex items-center justify-center text-lg shrink-0 border border-slate-100 transition-all ${target.accessories.includes(a.id) ? 'bg-purple-50 ring-2 ring-purple-300' : 'opacity-70'}`}
-                    title={a.name}
-                  >
-                    {a.icon}
-                  </button>
-                ))}
-              </div>
-            </div>
         </div>
       );
   }
@@ -443,9 +509,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         onClick={handleTogglePanel}
       >
         <div className="w-5" /> {/* Spacer for centering */}
-        <h2 className="text-sm font-black text-slate-700 text-center tracking-wide">EDIT</h2>
+        <h2 className="text-sm font-black text-slate-700 text-center tracking-wide">{isWeatherOnly ? 'WEATHER' : 'EDIT'}</h2>
         <button className="text-slate-400 hover:text-slate-600">
-          {isMinimized ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          <span className="text-lg">{isMinimized ? '🔼' : '🔽'}</span>
         </button>
       </div>
 
@@ -453,7 +519,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
       <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
         
         {/* Environment Controls */}
-        {activeTab === 'ENV' && (
+        {isWeatherOnly && activeTab === 'ENV' && (
           <div className="space-y-6 animate-pop">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Atmosphere</h3>
             
@@ -472,9 +538,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                       }`}
                       title={w}
                     >
-                      {w === WeatherType.SUNNY ? <Sun size={18} className="text-orange-400" /> : 
-                       w === WeatherType.RAINY ? <CloudRain size={18} className="text-blue-500" /> : 
-                       w === WeatherType.SNOWY ? <CloudSnow size={18} className="text-cyan-400" /> : 
+                      {w === WeatherType.SUNNY ? <span className="text-lg">☀️</span> : 
+                       w === WeatherType.RAINY ? <span className="text-lg">🌧️</span> : 
+                       w === WeatherType.SNOWY ? <span className="text-lg">❄️</span> : 
                        <span className="text-lg">☁️</span>}
                     </button>
                   ))}
@@ -495,10 +561,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                       }`}
                       title={t}
                     >
-                       {t === TimeOfDay.DAY ? <Sun size={16} /> :
-                        t === TimeOfDay.SUNSET ? <Sunset size={16} className="text-orange-500"/> :
-                        t === TimeOfDay.DAWN ? <Sunrise size={16} className="text-purple-400"/> :
-                        <Moon size={16} />}
+                       {t === TimeOfDay.DAY ? <span className="text-lg">☀️</span> :
+                        t === TimeOfDay.SUNSET ? <span className="text-lg">🌇</span> :
+                        t === TimeOfDay.DAWN ? <span className="text-lg">🌅</span> :
+                        <span className="text-lg">🌙</span>}
                        <span className="text-[9px] font-bold mt-1">{t.slice(0,3)}</span>
                     </button>
                   ))}
@@ -554,24 +620,84 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         {/* Tent Controls */}
         {activeTab === 'TENT' && (
            <div className="space-y-6 animate-pop">
-             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">My Tent</h3>
+             <div className="flex items-center justify-between">
+               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">My Tents</h3>
+               <button
+                 onClick={addTent}
+                 className="text-[10px] font-bold text-orange-500 bg-orange-50 border border-orange-100 px-3 py-1 rounded-full hover:bg-orange-100 transition-all"
+               >
+                 ➕ Add
+               </button>
+             </div>
+
+             {gameState.tents.length > 0 && (
+               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                 {gameState.tents.map((tent, index) => {
+                   const isActive = tent.id === activeTentId;
+                   const sizeLabel = tent.size === 'SMALL' ? 'S' : tent.size === 'MEDIUM' ? 'M' : 'L';
+                   return (
+                     <button
+                       key={tent.id}
+                       onClick={() => {
+                         setSelectedTentId(tent.id);
+                         setSelectedItemId(tent.id);
+                       }}
+                       className={`min-w-[70px] h-[62px] rounded-xl border-2 flex flex-col items-center justify-center gap-1 transition-all ${isActive ? 'border-orange-400 bg-orange-50 ring-2 ring-orange-200' : 'border-slate-100 bg-white hover:bg-slate-50'}`}
+                     >
+                       <span className="text-lg">{tent.type === 'TRIANGLE' ? '⛺️' : '🏠'}</span>
+                       <span className="text-[9px] font-bold text-slate-500">#{index + 1} · {sizeLabel}</span>
+                     </button>
+                   );
+                 })}
+               </div>
+             )}
+
+             {!activeTent && (
+               <div className="text-xs text-slate-400 text-center py-6">
+                 Add a tent to customize its style.
+               </div>
+             )}
+
+             {activeTent && (
+               <>
              
              {/* Type Selection */}
              <div className="bg-slate-50 p-3 rounded-2xl">
                 <span className="text-xs font-bold text-slate-400 block mb-2">Model</span>
                 <div className="flex gap-2">
                    <button 
-                      onClick={() => setGameState(prev => ({...prev, tent: {...prev.tent, type: 'TRIANGLE'}}))}
-                      className={`flex-1 py-2 rounded-xl flex items-center justify-center gap-2 transition-all ${gameState.tent.type === 'TRIANGLE' ? 'bg-orange-100 text-orange-600 border border-orange-200' : 'bg-white text-slate-400'}`}
+                      onClick={() => updateTent({ type: 'TRIANGLE' })}
+                      className={`flex-1 py-2 rounded-xl flex items-center justify-center gap-2 transition-all ${activeTent.type === 'TRIANGLE' ? 'bg-orange-100 text-orange-600 border border-orange-200' : 'bg-white text-slate-400'}`}
                    >
-                     <Triangle size={16} /> Dome
+                     <span className="text-lg">⛺️</span> Dome
                    </button>
                    <button 
-                      onClick={() => setGameState(prev => ({...prev, tent: {...prev.tent, type: 'SQUARE'}}))}
-                      className={`flex-1 py-2 rounded-xl flex items-center justify-center gap-2 transition-all ${gameState.tent.type === 'SQUARE' ? 'bg-orange-100 text-orange-600 border border-orange-200' : 'bg-white text-slate-400'}`}
+                      onClick={() => updateTent({ type: 'SQUARE' })}
+                      className={`flex-1 py-2 rounded-xl flex items-center justify-center gap-2 transition-all ${activeTent.type === 'SQUARE' ? 'bg-orange-100 text-orange-600 border border-orange-200' : 'bg-white text-slate-400'}`}
                    >
-                     <Box size={16} /> Cabin
+                     <span className="text-lg">🏠</span> Cabin
                    </button>
+                </div>
+             </div>
+
+             {/* Size Selection */}
+             <div className="bg-amber-50/80 p-3 rounded-2xl">
+                <span className="text-xs font-bold text-amber-500 block mb-2">Size</span>
+                <div className="grid grid-cols-3 gap-2">
+                  {TENT_SIZE_OPTIONS.map(size => (
+                    <button
+                      key={size.id}
+                      onClick={() => updateTent({ size: size.id })}
+                      className={`py-2 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all ${
+                        activeTent.size === size.id
+                        ? 'bg-amber-100 text-amber-700 border-amber-200'
+                        : 'bg-white text-slate-400 border-transparent'
+                      }`}
+                    >
+                      <span className="text-base font-black">{size.short}</span>
+                      <span className="text-[9px] font-bold">{size.name}</span>
+                    </button>
+                  ))}
                 </div>
              </div>
 
@@ -582,9 +708,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                   {TENT_PATTERNS.map(pat => (
                     <button
                       key={pat.id}
-                      onClick={() => setGameState(prev => ({ ...prev, tent: { ...prev.tent, pattern: pat.id as any } }))}
+                      onClick={() => updateTent({ pattern: pat.id as any })}
                       className={`min-w-[50px] h-12 rounded-xl border-2 flex items-center justify-center text-xl transition-all ${
-                        gameState.tent.pattern === pat.id ? 'border-orange-400 bg-white scale-105' : 'border-transparent bg-white/50'
+                        activeTent.pattern === pat.id ? 'border-orange-400 bg-white scale-105' : 'border-transparent bg-white/50'
                       }`}
                       title={pat.name}
                     >
@@ -601,9 +727,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                   {RUG_OPTIONS.map(rug => (
                     <button
                       key={rug.id}
-                      onClick={() => setGameState(prev => ({ ...prev, tent: { ...prev.tent, rug: rug.id as any } }))}
+                      onClick={() => updateTent({ rug: rug.id as any })}
                       className={`min-w-[70px] py-2 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${
-                        gameState.tent.rug === rug.id ? 'border-pink-400 bg-white' : 'border-white bg-white/50'
+                        activeTent.rug === rug.id ? 'border-pink-400 bg-white' : 'border-white bg-white/50'
                       }`}
                     >
                       <span className="text-xl">{rug.icon}</span>
@@ -617,14 +743,25 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
              <div className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between">
                 <span className="text-sm font-bold text-slate-600">Interior Light</span>
                 <button 
-                  onClick={() => setGameState(prev => ({ ...prev, tent: { ...prev.tent, isLit: !prev.tent.isLit } }))}
+                  onClick={() => updateTent({ isLit: !activeTent.isLit })}
                   className={`px-4 py-2 rounded-full font-bold text-xs transition-colors ${
-                    gameState.tent.isLit ? 'bg-yellow-400 text-white shadow-lg shadow-yellow-200' : 'bg-slate-200 text-slate-400'
+                    activeTent.isLit ? 'bg-yellow-400 text-white shadow-lg shadow-yellow-200' : 'bg-slate-200 text-slate-400'
                   }`}
                 >
-                  {gameState.tent.isLit ? 'ON' : 'OFF'}
+                  {activeTent.isLit ? 'ON' : 'OFF'}
                 </button>
              </div>
+
+             {gameState.tents.length > 1 && (
+               <button
+                 onClick={() => removeTent(activeTent.id)}
+                 className="w-full py-2 text-xs font-bold text-red-500 border border-red-100 bg-red-50 rounded-xl hover:bg-red-100 transition-all"
+               >
+                 Remove This Tent
+               </button>
+             )}
+             </>
+             )}
            </div>
         )}
 
@@ -728,7 +865,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                                 className="min-w-[60px] h-[60px] rounded-full border-2 border-dashed border-blue-200 bg-blue-50 flex items-center justify-center text-blue-400 hover:bg-blue-100 transition-all flex-col"
                                 title="Add Male Friend"
                             >
-                                <Plus size={16} />
+                                <span className="text-base">➕</span>
                                 <span className="text-[8px] font-bold">MALE</span>
                             </button>
                             <button
@@ -736,7 +873,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                                 className="min-w-[60px] h-[60px] rounded-full border-2 border-dashed border-pink-200 bg-pink-50 flex items-center justify-center text-pink-400 hover:bg-pink-100 transition-all flex-col"
                                 title="Add Female Friend"
                             >
-                                <Plus size={16} />
+                                <span className="text-base">➕</span>
                                 <span className="text-[8px] font-bold">FEMALE</span>
                             </button>
                         </div>
@@ -775,15 +912,16 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
       </div>
 
       {/* Navigation Dock */}
-      <div className="bg-white p-2 border-t border-slate-100 flex justify-around items-center h-16 min-h-[4rem] max-w-full overflow-x-auto scrollbar-hide">
-        <NavButton icon={<Sun size={20} />} active={activeTab === 'ENV'} onClick={() => setActiveTab('ENV')} color="text-blue-500" />
-        <NavButton icon={<Tent size={20} />} active={activeTab === 'TENT'} onClick={() => setActiveTab('TENT')} color="text-orange-500" />
-        <NavButton icon={<Package size={20} />} active={activeTab === 'DECOR'} onClick={() => setActiveTab('DECOR')} color="text-green-500" />
-        <NavButton icon={<Flower size={20} />} active={activeTab === 'NATURE'} onClick={() => setActiveTab('NATURE')} color="text-emerald-600" />
-        <NavButton icon={<Cat size={20} />} active={activeTab === 'PETS'} onClick={() => setActiveTab('PETS')} color="text-yellow-500" />
-        <NavButton icon={<User size={20} />} active={activeTab === 'YOU'} onClick={() => setActiveTab('YOU')} color="text-purple-500" />
-        <NavButton icon={<Users size={20} />} active={activeTab === 'FRIEND'} onClick={() => setActiveTab('FRIEND')} color="text-pink-500" />
-      </div>
+      {!isWeatherOnly && (
+        <div className="bg-white p-2 border-t border-slate-100 flex justify-around items-center h-16 min-h-[4rem] max-w-full overflow-x-auto scrollbar-hide">
+          <NavButton icon={<span className="text-lg">🧑</span>} active={activeTab === 'YOU'} onClick={() => setActiveTab('YOU')} color="text-purple-500" />
+          <NavButton icon={<span className="text-lg">🐾</span>} active={activeTab === 'PETS'} onClick={() => setActiveTab('PETS')} color="text-yellow-500" />
+          <NavButton icon={<span className="text-lg">🧰</span>} active={activeTab === 'DECOR'} onClick={() => setActiveTab('DECOR')} color="text-green-500" />
+          <NavButton icon={<span className="text-lg">⛺️</span>} active={activeTab === 'TENT'} onClick={() => setActiveTab('TENT')} color="text-orange-500" />
+          <NavButton icon={<span className="text-lg">🌿</span>} active={activeTab === 'NATURE'} onClick={() => setActiveTab('NATURE')} color="text-emerald-600" />
+          <NavButton icon={<span className="text-lg">👥</span>} active={activeTab === 'FRIEND'} onClick={() => setActiveTab('FRIEND')} color="text-pink-500" />
+        </div>
+      )}
     </div>
   );
 };
