@@ -13,8 +13,8 @@ const ISLAND_TOP_Y = 0;
 const ISLAND_HEIGHT = 0.6;
 const ISLAND_CENTER_HEIGHT = 1.3;
 const ISLAND_EDGE_HEIGHT = 0.8;
-const ISLAND_CENTER_RADIUS = 0.6;
-const ISLAND_EDGE_RADIUS = 0.9;
+const ISLAND_CENTER_RADIUS = 0.8;
+const ISLAND_EDGE_RADIUS = 1.0;
 const ISLAND_EDGE_Y_OFFSET = ISLAND_EDGE_HEIGHT - ISLAND_CENTER_HEIGHT;
 const PET_GROUND_OFFSET = -0.06;
 const TREE_GROUND_OFFSET = -0.08;
@@ -40,6 +40,25 @@ const getTentScale = (size: TentSize) => (size === 'SMALL' ? 0.8 : (size === 'LA
 const getTentRadius = (size: TentSize) => 1.6 * getTentScale(size);
 
 const GREETINGS = ["Hi!", "Hello!", "Hey there!", "Yo!", "Nice day!", "Campsite looks great!", "Anyone have snacks?", "Relaxing...", "Good vibes only"];
+const TABLETOP_ITEM_IDS = new Set([
+    'pot',
+    'coffee_pot',
+    'ramen_pot',
+    'camping_burner',
+    'spoon_chopsticks',
+    'choco_cookie',
+    'marshmallow',
+    'coffee_cup',
+    'first_aid',
+    'books',
+    'radio',
+    'game_console',
+    'laptop',
+    'candle',
+    'lantern',
+    'flashlight',
+    'plate'
+]);
 
 // --- Texture/Pattern Generation Helpers ---
 const createPatternTexture = (type: string) => {
@@ -139,6 +158,9 @@ const createPatternTexture = (type: string) => {
             ctx.arc(x, y, 8, 0, Math.PI * 2);
             ctx.fill();
         }
+    } else if (type === 'RED') {
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(0, 0, 512, 512);
     } else {
         // Default Orange
         ctx.fillStyle = '#e67e22';
@@ -157,6 +179,8 @@ const getPatternBaseColor = (pattern: string): string => {
             return '#e67e22';
         case 'YELLOW_STARS':
             return '#ffffff';
+        case 'RED':
+            return '#e74c3c';
         case 'KHAKI_OUTDOOR':
             return '#c4a747';
         case 'DOTS':
@@ -363,6 +387,54 @@ const WaterPlane = ({ textures, color, roughness, metalness, bumpScale, displace
     );
 };
 
+const WaterGlitter = ({ count = 160 }: { count?: number }) => {
+    const meshRef = useRef<THREE.InstancedMesh>(null);
+    const dummy = useMemo(() => new THREE.Object3D(), []);
+    const sparkles = useMemo(() => {
+        const minR = ISLAND_RADIUS + 2.5;
+        const maxR = 78;
+        return Array.from({ length: count }, () => {
+            const r = Math.sqrt(Math.random() * (maxR * maxR - minR * minR) + minR * minR);
+            const a = Math.random() * Math.PI * 2;
+            return {
+                x: Math.cos(a) * r,
+                z: Math.sin(a) * r,
+                base: 0.08 + Math.random() * 0.18,
+                phase: Math.random() * Math.PI * 2,
+                speed: 0.7 + Math.random() * 1.6
+            };
+        });
+    }, [count]);
+
+    useFrame(({ clock }) => {
+        if (!meshRef.current) return;
+        const t = clock.elapsedTime;
+        sparkles.forEach((s, i) => {
+            const flicker = 0.55 + Math.sin(t * s.speed + s.phase) * 0.35 + Math.sin(t * (s.speed + 1.4) + s.phase * 0.4) * 0.15;
+            const scale = s.base * (0.6 + flicker);
+            dummy.position.set(s.x, -0.49, s.z);
+            dummy.rotation.set(-Math.PI / 2, 0, 0);
+            dummy.scale.set(scale * 3.2, scale * 0.35, 1);
+            dummy.updateMatrix();
+            meshRef.current!.setMatrixAt(i, dummy.matrix);
+        });
+        meshRef.current.instanceMatrix.needsUpdate = true;
+    });
+
+    return (
+        <instancedMesh ref={meshRef} args={[undefined, undefined, count]}>
+            <planeGeometry args={[1, 1]} />
+            <meshBasicMaterial
+                color="#eaf7ff"
+                transparent
+                opacity={0.7}
+                depthWrite={false}
+                blending={THREE.AdditiveBlending}
+            />
+        </instancedMesh>
+    );
+};
+
 // --- Environmental Effects ---
 const Rain = ({ count = 300 }) => {
   const meshRef = useRef<THREE.InstancedMesh>(null);
@@ -456,18 +528,35 @@ const Snow = ({ count = 260 }) => {
 // --- Trees ---
 const Tree = ({ type }: { type: number }) => {
     if (type === 4) {
+        const leafAngles = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2];
+        const trunkBands = [0.45, 0.9, 1.35, 1.8];
         return (
             <group>
-                <mesh position={[0, 1.1, 0]} castShadow>
-                    <cylinderGeometry args={[0.18, 0.26, 2.2, 8]} />
-                    <meshStandardMaterial color="#8d6e63" />
-                </mesh>
-                <group position={[0, 2.2, 0]}>
-                    {[0, (2 * Math.PI) / 3, (4 * Math.PI) / 3].map((a, i) => (
-                        <mesh key={i} rotation={[-0.5, a, 0]} position={[0, 0, 0.8]}>
-                            <boxGeometry args={[0.2, 0.08, 1.8]} />
-                            <meshStandardMaterial color="#2ecc71" />
+                <group>
+                    <mesh position={[0, 1.1, 0]} castShadow>
+                        <cylinderGeometry args={[0.26, 0.36, 2.2, 12]} />
+                        <meshStandardMaterial color="#d49a55" roughness={0.9} />
+                    </mesh>
+                    {trunkBands.map((y, i) => (
+                        <mesh key={`band-${i}`} position={[0, y, 0]} castShadow>
+                            <cylinderGeometry args={[0.38, 0.38, 0.06, 12]} />
+                            <meshStandardMaterial color="#c28646" roughness={0.95} />
                         </mesh>
+                    ))}
+                </group>
+
+                <group position={[0, 2.35, 0]}>
+                    <mesh position={[0, -0.05, 0]}>
+                        <sphereGeometry args={[0.2, 16, 12]} />
+                        <meshStandardMaterial color="#6e8f63" />
+                    </mesh>
+                    {leafAngles.map((a, i) => (
+                        <group key={`leaf-${i}`} rotation={[0, a, 0]}>
+                            <mesh position={[0, 0.08, 1.1]} rotation={[0.32, 0, 0]} scale={[2.0, 0.32, 5.8]}>
+                                <capsuleGeometry args={[0.16, 1.3, 6, 10]} />
+                                <meshStandardMaterial color="#7aa870" roughness={0.75} />
+                            </mesh>
+                        </group>
                     ))}
                 </group>
             </group>
@@ -505,9 +594,47 @@ const Tree = ({ type }: { type: number }) => {
             </group>
         );
     }
+    if (type === 6) {
+        return (
+            <group>
+                <mesh position={[0, 0.7, 0]} castShadow>
+                    <cylinderGeometry args={[0.55, 0.7, 1.4, 14]} />
+                    <meshStandardMaterial color="#8d6b4f" roughness={0.9} />
+                </mesh>
+                <mesh position={[0, 1.5, 0]} castShadow>
+                    <sphereGeometry args={[0.65, 16, 14]} />
+                    <meshStandardMaterial color="#9c7456" roughness={0.9} />
+                </mesh>
+                <mesh position={[0.45, 1.6, 0]} rotation={[0, 0, -0.2]} castShadow>
+                    <cylinderGeometry args={[0.14, 0.18, 0.8, 10]} />
+                    <meshStandardMaterial color="#8d6b4f" roughness={0.9} />
+                </mesh>
+                <mesh position={[-0.45, 1.6, 0]} rotation={[0, 0, 0.2]} castShadow>
+                    <cylinderGeometry args={[0.14, 0.18, 0.8, 10]} />
+                    <meshStandardMaterial color="#8d6b4f" roughness={0.9} />
+                </mesh>
+                <mesh position={[0, 2.2, 0]} castShadow>
+                    <sphereGeometry args={[1.1, 18, 16]} />
+                    <meshStandardMaterial color="#6dbb5a" roughness={0.85} />
+                </mesh>
+                <mesh position={[0.8, 2.1, -0.2]} castShadow>
+                    <sphereGeometry args={[0.7, 16, 14]} />
+                    <meshStandardMaterial color="#6dbb5a" roughness={0.85} />
+                </mesh>
+                <mesh position={[-0.8, 2.05, 0.1]} castShadow>
+                    <sphereGeometry args={[0.75, 16, 14]} />
+                    <meshStandardMaterial color="#6dbb5a" roughness={0.85} />
+                </mesh>
+                <mesh position={[0.1, 2.6, 0.3]} castShadow>
+                    <sphereGeometry args={[0.6, 14, 12]} />
+                    <meshStandardMaterial color="#6dbb5a" roughness={0.85} />
+                </mesh>
+            </group>
+        );
+    }
 
     return (
-        <group>
+        <group scale={[0.4, 0.4, 0.4]}>
             <mesh position={[0, 0.5, 0]} castShadow>
                 <cylinderGeometry args={[0.2, 0.3, 1]} />
                 <meshStandardMaterial color="#5d4037" />
@@ -540,6 +667,24 @@ const Tree = ({ type }: { type: number }) => {
         </group>
     )
 }
+
+const createPinkSkyTexture = () => {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d')!;
+    const grad = ctx.createLinearGradient(0, 0, 0, size);
+    grad.addColorStop(0, '#ff4d7d');
+    grad.addColorStop(1, '#ffc6d0');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    return tex;
+};
 
 // --- Distinct Items ---
 const Campfire = () => {
@@ -718,26 +863,30 @@ const CampingBurner = () => (
     </group>
 );
 const RamenPot = () => (
-    <group>
+    <group scale={[0.67, 0.67, 0.67]}>
+        {/* Red body */}
         <mesh position={[0, 0.18, 0]}>
             <cylinderGeometry args={[0.24, 0.22, 0.26, 24]} />
-            <meshStandardMaterial color="#f0c36d" metalness={0.25} roughness={0.6} />
+            <meshStandardMaterial color="#d8433a" metalness={0.15} roughness={0.7} />
         </mesh>
+        {/* Steel rim */}
         <mesh position={[0, 0.32, 0]}>
             <cylinderGeometry args={[0.25, 0.25, 0.04, 24]} />
-            <meshStandardMaterial color="#f7d38f" metalness={0.2} roughness={0.5} />
+            <meshStandardMaterial color="#cfd8dc" metalness={0.7} roughness={0.35} />
         </mesh>
-        <mesh position={[0, 0.26, 0]} rotation={[-Math.PI/2, 0, 0]}>
+        {/* Glass lid */}
+        <mesh position={[0, 0.36, 0]} rotation={[-Math.PI / 2, 0, 0]}>
             <circleGeometry args={[0.2, 24]} />
-            <meshStandardMaterial color="#ff6f3d" />
+            <meshStandardMaterial color="#e6f7ff" transparent opacity={0.55} roughness={0.1} metalness={0} depthWrite={false} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
         </mesh>
-        <mesh position={[0.28, 0.22, 0]} rotation={[0, 0, Math.PI/2]}>
-            <torusGeometry args={[0.06, 0.02, 8, 16, Math.PI]} />
-            <meshStandardMaterial color="#f0c36d" />
+        {/* Wooden lid handle */}
+        <mesh position={[0, 0.39, 0]}>
+            <cylinderGeometry args={[0.05, 0.05, 0.08, 12]} />
+            <meshStandardMaterial color="#8d5a2b" roughness={0.8} />
         </mesh>
-        <mesh position={[-0.28, 0.22, 0]} rotation={[0, 0, -Math.PI/2]}>
-            <torusGeometry args={[0.06, 0.02, 8, 16, Math.PI]} />
-            <meshStandardMaterial color="#f0c36d" />
+        <mesh position={[0, 0.43, 0]}>
+            <sphereGeometry args={[0.04, 12, 12]} />
+            <meshStandardMaterial color="#a46b3c" roughness={0.75} />
         </mesh>
     </group>
 );
@@ -792,6 +941,42 @@ const Marshmallow = () => (
         <mesh position={[0.02, 0.25, 0]} rotation={[0,0,-0.2]}><cylinderGeometry args={[0.08, 0.08, 0.12]} /><meshStandardMaterial color="#fff" /></mesh> 
     </group> 
 );
+const Tteokbokki = () => (
+    <group>
+        {/* Plate */}
+        <mesh position={[0, 0.04, 0]}>
+            <cylinderGeometry args={[0.22, 0.22, 0.06, 24]} />
+            <meshStandardMaterial color="#f5f1e8" />
+        </mesh>
+        {/* Sauce */}
+        <mesh position={[0, 0.07, 0]}>
+            <cylinderGeometry args={[0.18, 0.18, 0.04, 24]} />
+            <meshStandardMaterial color="#d6452d" roughness={0.7} />
+        </mesh>
+        {/* Rice cakes */}
+        {[
+            [-0.06, 0.1, 0.02, 0.3],
+            [0.04, 0.1, -0.03, -0.2],
+            [0.0, 0.1, 0.06, 0.7],
+            [0.08, 0.1, 0.05, 0.2]
+        ].map(([x, y, z, r], i) => (
+            <mesh key={`tteok-${i}`} position={[x, y, z]} rotation={[0, r as number, 0]}>
+                <cylinderGeometry args={[0.03, 0.03, 0.12, 12]} />
+                <meshStandardMaterial color="#f9d7b7" roughness={0.5} />
+            </mesh>
+        ))}
+        {/* Fishcake piece */}
+        <mesh position={[-0.02, 0.11, -0.07]} rotation={[0.2, 0.6, 0]}>
+            <boxGeometry args={[0.12, 0.02, 0.06]} />
+            <meshStandardMaterial color="#f2c38b" roughness={0.6} />
+        </mesh>
+        {/* Green onion */}
+        <mesh position={[0.1, 0.13, -0.02]} rotation={[0, 0, -0.4]}>
+            <cylinderGeometry args={[0.008, 0.008, 0.12, 8]} />
+            <meshStandardMaterial color="#5fbf5a" />
+        </mesh>
+    </group>
+);
 const CampingChair = () => ( <group> <mesh position={[0.25, 0.4, 0.25]} rotation={[0, 0, -0.2]}><cylinderGeometry args={[0.03, 0.03, 0.9]} /><meshStandardMaterial color="#555" /></mesh> <mesh position={[-0.25, 0.4, 0.25]} rotation={[0, 0, 0.2]}><cylinderGeometry args={[0.03, 0.03, 0.9]} /><meshStandardMaterial color="#555" /></mesh> <mesh position={[0.25, 0.4, -0.25]} rotation={[0, 0, -0.2]}><cylinderGeometry args={[0.03, 0.03, 0.9]} /><meshStandardMaterial color="#555" /></mesh> <mesh position={[-0.25, 0.4, -0.25]} rotation={[0, 0, 0.2]}><cylinderGeometry args={[0.03, 0.03, 0.9]} /><meshStandardMaterial color="#555" /></mesh> <mesh position={[0, 0.4, 0]} rotation={[-0.1, 0, 0]}><boxGeometry args={[0.6, 0.05, 0.6]} /><meshToonMaterial color="#e17055" /></mesh> <mesh position={[0, 0.8, -0.25]} rotation={[-0.2, 0, 0]}><boxGeometry args={[0.6, 0.5, 0.05]} /><meshToonMaterial color="#e17055" /></mesh> <mesh position={[0.32, 0.6, 0]} rotation={[0, 0, 0]}><boxGeometry args={[0.08, 0.05, 0.6]} /><meshStandardMaterial color="#d63031" /></mesh> <mesh position={[-0.32, 0.6, 0]} rotation={[0, 0, 0]}><boxGeometry args={[0.08, 0.05, 0.6]} /><meshStandardMaterial color="#d63031" /></mesh> </group> );
 const CampingTable = () => ( <group> <mesh position={[0, 0.5, 0]}><boxGeometry args={[1.2, 0.08, 0.8]} /><meshStandardMaterial color="#d35400" /></mesh> <mesh position={[0.5, 0.25, 0.3]} rotation={[0, 0, -0.1]}><cylinderGeometry args={[0.04, 0.03, 0.5]} /><meshStandardMaterial color="#b2bec3" /></mesh> <mesh position={[-0.5, 0.25, 0.3]} rotation={[0, 0, 0.1]}><cylinderGeometry args={[0.04, 0.03, 0.5]} /><meshStandardMaterial color="#b2bec3" /></mesh> <mesh position={[0.5, 0.25, -0.3]} rotation={[0, 0, -0.1]}><cylinderGeometry args={[0.04, 0.03, 0.5]} /><meshStandardMaterial color="#b2bec3" /></mesh> <mesh position={[-0.5, 0.25, -0.3]} rotation={[0, 0, 0.1]}><cylinderGeometry args={[0.04, 0.03, 0.5]} /><meshStandardMaterial color="#b2bec3" /></mesh> <mesh position={[0, 0.3, 0]} rotation={[0, 0, 1.57]}><cylinderGeometry args={[0.02, 0.02, 1.0]} /><meshStandardMaterial color="#636e72" /></mesh> </group> );
 const CampingLantern = () => ( <group> <mesh position={[0, 0.1, 0]}><cylinderGeometry args={[0.15, 0.18, 0.2]} /><meshStandardMaterial color="#2d3436" /></mesh> <mesh position={[0, 0.35, 0]}><cylinderGeometry args={[0.12, 0.12, 0.3]} /><meshStandardMaterial color="#fff" transparent opacity={0.3} /></mesh> <mesh position={[0, 0.55, 0]}><coneGeometry args={[0.2, 0.15, 16]} /><meshStandardMaterial color="#2d3436" /></mesh> <mesh position={[0, 0.65, 0]} rotation={[0, 0, 1.57]}><torusGeometry args={[0.1, 0.02, 8, 16]} /><meshStandardMaterial color="#000" /></mesh> <pointLight position={[0, 0.35, 0]} intensity={3} color="#ffeaa7" distance={8} decay={2} /> <mesh position={[0, 0.35, 0]}><sphereGeometry args={[0.05]} /><meshBasicMaterial color="#ffeaa7" /></mesh> </group> );
@@ -808,17 +993,17 @@ const WoodenStreetLamp = () => (
         <group position={[0.7, 2.2, 0]}>
             <mesh position={[0, 0, 0]}>
                 <boxGeometry args={[0.35, 0.4, 0.35]} />
-                <meshStandardMaterial color="#2d3436" />
+                <meshStandardMaterial color="#6b4a2f" transparent opacity={0.35} roughness={0.5} metalness={0.1} />
             </mesh>
             <mesh position={[0, 0, 0]}>
                 <boxGeometry args={[0.28, 0.28, 0.28]} />
-                <meshPhysicalMaterial color="#fff6d6" emissive="#ffe7b3" emissiveIntensity={0.35} transparent opacity={0.55} transmission={0.85} roughness={0.15} thickness={0.2} ior={1.45} />
+                <meshPhysicalMaterial color="#b97a45" emissive="#7a4a26" emissiveIntensity={0.25} transparent opacity={0.4} transmission={0.8} roughness={0.25} thickness={0.16} ior={1.35} />
             </mesh>
             <mesh position={[0, 0, 0]}>
                 <sphereGeometry args={[0.06, 16, 16]} />
-                <meshStandardMaterial color="#fff1b8" emissive="#ffdca0" emissiveIntensity={1.2} />
+                <meshStandardMaterial color="#fff1b8" emissive="#ffe7b3" emissiveIntensity={1.8} />
             </mesh>
-            <pointLight position={[0, 0, 0]} intensity={2.0} distance={7} color="#ffe7b3" decay={2} />
+            <pointLight position={[0, 0, 0]} intensity={3.0} distance={8} color="#ffe7b3" decay={2} />
         </group>
     </group>
 );
@@ -854,10 +1039,368 @@ const Flashlight = () => (
 );
 const TeddyBear = () => (<group><mesh position={[0,0.3,0]}><sphereGeometry args={[0.25]}/><meshToonMaterial color="#8d6e63"/></mesh><mesh position={[0,0.6,0]}><sphereGeometry args={[0.2]}/><meshToonMaterial color="#8d6e63"/></mesh><mesh position={[0.18,0.7,0]}><sphereGeometry args={[0.08]}/><meshToonMaterial color="#8d6e63"/></mesh><mesh position={[-0.18,0.7,0]}><sphereGeometry args={[0.08]}/><meshToonMaterial color="#8d6e63"/></mesh><mesh position={[0.2,0.3,0.1]}><sphereGeometry args={[0.1]}/><meshToonMaterial color="#8d6e63"/></mesh><mesh position={[-0.2,0.3,0.1]}><sphereGeometry args={[0.1]}/><meshToonMaterial color="#8d6e63"/></mesh><mesh position={[0.1,0.1,0.2]}><sphereGeometry args={[0.1]}/><meshToonMaterial color="#8d6e63"/></mesh><mesh position={[-0.1,0.1,0.2]}><sphereGeometry args={[0.1]}/><meshToonMaterial color="#8d6e63"/></mesh></group>);
 const Pond = () => (<group><mesh rotation={[-Math.PI/2,0,0]} position={[0,0.01,0]}><circleGeometry args={[1.5,32]}/><meshStandardMaterial color="#4fc3f7" roughness={0.1}/></mesh><mesh position={[0.5,0.01,0.5]}><sphereGeometry args={[0.2]}/><meshStandardMaterial color="#95a5a6"/></mesh><mesh position={[-0.8,0.01,-0.2]}><sphereGeometry args={[0.15]}/><meshStandardMaterial color="#7f8c8d"/></mesh></group>);
+const Sandcastle = () => {
+    const baseColor = "#f3d8a6";
+    const midColor = "#f6e1b8";
+    const accentColor = "#e1c089";
+    const darkAccent = "#d3b07a";
+    const flagColor = "#f25b3d";
+    const poleColor = "#e6b563";
+    const crenelAngles = Array.from({ length: 8 }, (_, i) => (i * Math.PI * 2) / 8);
+    return (
+        <group scale={[0.25, 0.25, 0.25]}>
+            <mesh position={[0, 0.28, 0]} castShadow receiveShadow>
+                <cylinderGeometry args={[1.35, 1.5, 0.56, 24]} />
+                <meshStandardMaterial color={baseColor} roughness={0.9} />
+            </mesh>
+            <mesh position={[0, 0.65, 0]} castShadow receiveShadow>
+                <cylinderGeometry args={[1.15, 1.25, 0.38, 24]} />
+                <meshStandardMaterial color={midColor} roughness={0.9} />
+            </mesh>
+            <mesh position={[0, 0.55, 1.05]} castShadow>
+                <RoundedBox args={[0.45, 0.5, 0.08]} radius={0.18} smoothness={6}>
+                    <meshStandardMaterial color={accentColor} />
+                </RoundedBox>
+            </mesh>
+            <mesh position={[0, 0.55, 1.09]}>
+                <RoundedBox args={[0.3, 0.36, 0.04]} radius={0.14} smoothness={4}>
+                    <meshStandardMaterial color={darkAccent} />
+                </RoundedBox>
+            </mesh>
+            <mesh position={[0, 0.32, 1.15]}>
+                <boxGeometry args={[0.6, 0.08, 0.1]} />
+                <meshStandardMaterial color={accentColor} />
+            </mesh>
+            {crenelAngles.map((a, i) => (
+                <mesh
+                    key={`crenel-base-${i}`}
+                    position={[Math.cos(a) * 1.08, 0.9, Math.sin(a) * 1.08]}
+                    rotation={[0, a, 0]}
+                >
+                    <boxGeometry args={[0.26, 0.14, 0.22]} />
+                    <meshStandardMaterial color={accentColor} />
+                </mesh>
+            ))}
+
+            <mesh position={[0, 1.1, 0]} castShadow>
+                <cylinderGeometry args={[0.6, 0.72, 1.2, 22]} />
+                <meshStandardMaterial color={baseColor} roughness={0.9} />
+            </mesh>
+            <mesh position={[0, 1.7, 0]} castShadow>
+                <cylinderGeometry args={[0.64, 0.7, 0.22, 22]} />
+                <meshStandardMaterial color={accentColor} roughness={0.9} />
+            </mesh>
+            {crenelAngles.map((a, i) => (
+                <mesh
+                    key={`crenel-top-${i}`}
+                    position={[Math.cos(a) * 0.62, 1.9, Math.sin(a) * 0.62]}
+                    rotation={[0, a, 0]}
+                >
+                    <boxGeometry args={[0.18, 0.12, 0.18]} />
+                    <meshStandardMaterial color={accentColor} />
+                </mesh>
+            ))}
+            <mesh position={[0, 2.3, 0]} castShadow>
+                <coneGeometry args={[0.5, 0.8, 22]} />
+                <meshStandardMaterial color={midColor} roughness={0.85} />
+            </mesh>
+
+            <mesh position={[-1.1, 0.78, 0]} castShadow>
+                <cylinderGeometry args={[0.48, 0.6, 1.0, 20]} />
+                <meshStandardMaterial color={baseColor} roughness={0.9} />
+            </mesh>
+            <mesh position={[1.1, 0.78, 0]} castShadow>
+                <cylinderGeometry args={[0.48, 0.6, 1.0, 20]} />
+                <meshStandardMaterial color={baseColor} roughness={0.9} />
+            </mesh>
+            <mesh position={[-1.1, 1.28, 0]} castShadow>
+                <cylinderGeometry args={[0.5, 0.55, 0.18, 20]} />
+                <meshStandardMaterial color={accentColor} roughness={0.9} />
+            </mesh>
+            <mesh position={[1.1, 1.28, 0]} castShadow>
+                <cylinderGeometry args={[0.5, 0.55, 0.18, 20]} />
+                <meshStandardMaterial color={accentColor} roughness={0.9} />
+            </mesh>
+            <mesh position={[-1.1, 0.7, 0.52]}>
+                <RoundedBox args={[0.24, 0.3, 0.06]} radius={0.1} smoothness={4}>
+                    <meshStandardMaterial color={darkAccent} />
+                </RoundedBox>
+            </mesh>
+            <mesh position={[1.1, 0.7, 0.52]}>
+                <RoundedBox args={[0.24, 0.3, 0.06]} radius={0.1} smoothness={4}>
+                    <meshStandardMaterial color={darkAccent} />
+                </RoundedBox>
+            </mesh>
+
+            <group position={[0, 2.55, 0]}>
+                <mesh position={[0, 0.25, 0]}>
+                    <cylinderGeometry args={[0.03, 0.03, 0.5, 8]} />
+                    <meshStandardMaterial color={poleColor} />
+                </mesh>
+                <mesh position={[0, 0.52, 0]}>
+                    <sphereGeometry args={[0.05, 10, 10]} />
+                    <meshStandardMaterial color="#f7d06b" />
+                </mesh>
+                <mesh position={[0.25, 0.32, 0]} rotation={[0, 0, 0.2]}>
+                    <boxGeometry args={[0.5, 0.25, 0.04]} />
+                    <meshStandardMaterial color={flagColor} />
+                </mesh>
+            </group>
+            <group position={[-1.1, 1.55, 0]}>
+                <mesh position={[0, 0.2, 0]}>
+                    <cylinderGeometry args={[0.025, 0.025, 0.4, 8]} />
+                    <meshStandardMaterial color={poleColor} />
+                </mesh>
+                <mesh position={[0, 0.42, 0]}>
+                    <sphereGeometry args={[0.04, 10, 10]} />
+                    <meshStandardMaterial color="#f7d06b" />
+                </mesh>
+                <mesh position={[0.2, 0.28, 0]} rotation={[0, 0, 0.2]}>
+                    <boxGeometry args={[0.38, 0.2, 0.04]} />
+                    <meshStandardMaterial color={flagColor} />
+                </mesh>
+            </group>
+            <group position={[1.1, 1.55, 0]}>
+                <mesh position={[0, 0.2, 0]}>
+                    <cylinderGeometry args={[0.025, 0.025, 0.4, 8]} />
+                    <meshStandardMaterial color={poleColor} />
+                </mesh>
+                <mesh position={[0, 0.42, 0]}>
+                    <sphereGeometry args={[0.04, 10, 10]} />
+                    <meshStandardMaterial color="#f7d06b" />
+                </mesh>
+                <mesh position={[0.2, 0.28, 0]} rotation={[0, 0, 0.2]}>
+                    <boxGeometry args={[0.38, 0.2, 0.04]} />
+                    <meshStandardMaterial color={flagColor} />
+                </mesh>
+            </group>
+        </group>
+    );
+};
+const Surfboard = () => (
+    <group>
+        <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0.12, 0]} scale={[1.1, 0.95, 0.27]}>
+            <capsuleGeometry args={[0.46, 2.0, 10, 16]} />
+            <meshStandardMaterial color="#f7c84f" roughness={0.55} />
+        </mesh>
+        <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0.185, -0.65]} scale={[1.0, 0.24, 0.05]}>
+            <capsuleGeometry args={[0.42, 1.65, 10, 16]} />
+            <meshStandardMaterial color="#8fd3ff" roughness={0.35} metalness={0.08} depthWrite={false} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-4} polygonOffsetUnits={-4} />
+        </mesh>
+        <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0.185, -0.35]} scale={[1.0, 0.24, 0.05]}>
+            <capsuleGeometry args={[0.42, 1.65, 10, 16]} />
+            <meshStandardMaterial color="#8fd3ff" roughness={0.35} metalness={0.08} depthWrite={false} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-4} polygonOffsetUnits={-4} />
+        </mesh>
+        <RoundedBox args={[0.1, 0.32, 0.27]} radius={0.05} smoothness={4} position={[0, -0.06, -0.65]}>
+            <meshStandardMaterial color="#3a7fdc" roughness={0.4} />
+        </RoundedBox>
+    </group>
+);
+const Mailbox = ({ isOpen = false }: { isOpen?: boolean }) => (
+    <group scale={[0.5, 0.5, 0.5]}>
+        <mesh position={[0, 0.06, 0]} castShadow>
+            <cylinderGeometry args={[0.35, 0.42, 0.12, 16]} />
+            <meshStandardMaterial color="#8f6b4f" roughness={0.9} />
+        </mesh>
+        <mesh position={[0, 0.65, 0]} castShadow>
+            <cylinderGeometry args={[0.12, 0.14, 1.1, 10]} />
+            <meshStandardMaterial color="#d3a373" roughness={0.9} />
+        </mesh>
+        <group position={[0, 1.4, 0]}>
+            <RoundedBox args={[0.9, 0.45, 0.7]} radius={0.18} smoothness={6}>
+                <meshStandardMaterial color="#f2606a" roughness={0.5} />
+            </RoundedBox>
+            <RoundedBox args={[0.86, 0.38, 0.66]} radius={0.16} smoothness={6} position={[0, -0.08, 0]}>
+                <meshStandardMaterial color="#c6c6c6" roughness={0.7} />
+            </RoundedBox>
+            <RoundedBox args={[0.56, 0.24, 0.08]} radius={0.12} smoothness={4} position={[0, 0.02, 0.34]}>
+                <meshStandardMaterial color="#7b2d2f" roughness={0.6} />
+            </RoundedBox>
+            <group position={[0, -0.22, 0.46]} rotation={[isOpen ? -0.9 : 0, 0, 0]}>
+                <RoundedBox args={[0.6, 0.28, 0.08]} radius={0.14} smoothness={6} position={[0, 0.14, 0]}>
+                    <meshStandardMaterial color="#e84557" roughness={0.5} />
+                </RoundedBox>
+            </group>
+            {isOpen && (
+                <>
+                    <mesh position={[0.16, 0.05, 0.46]} rotation={[0.1, 0.2, 0]}>
+                        <boxGeometry args={[0.22, 0.14, 0.05]} />
+                        <meshStandardMaterial color="#f2c14e" roughness={0.4} />
+                    </mesh>
+                    <mesh position={[0.16, 0.1, 0.49]} rotation={[-0.5, 0.2, 0]}>
+                        <planeGeometry args={[0.2, 0.12]} />
+                        <meshStandardMaterial color="#f5d26b" roughness={0.4} side={THREE.DoubleSide} />
+                    </mesh>
+                </>
+            )}
+            <group position={[-0.35, 0.2, 0]}>
+                <mesh position={[0, 0.2, 0]}>
+                    <cylinderGeometry args={[0.02, 0.02, 0.4, 8]} />
+                    <meshStandardMaterial color="#f7d56e" />
+                </mesh>
+                <mesh position={[0, 0.42, 0]}>
+                    <sphereGeometry args={[0.05, 10, 10]} />
+                    <meshStandardMaterial color="#f7d56e" />
+                </mesh>
+                <mesh position={[0.12, 0.32, 0]} rotation={[0, 0, 0.2]}>
+                    <RoundedBox args={[0.24, 0.12, 0.04]} radius={0.04} smoothness={4}>
+                        <meshStandardMaterial color="#f4a1a8" />
+                    </RoundedBox>
+                </mesh>
+            </group>
+        </group>
+    </group>
+);
 const BoxItem = () => (<group><mesh position={[0,0.25,0]}><boxGeometry args={[0.6,0.5,0.4]}/><meshStandardMaterial color="#e67e22"/></mesh><mesh position={[0,0.25,0]}><boxGeometry args={[0.62,0.1,0.42]}/><meshStandardMaterial color="#d35400"/></mesh></group>);
-const Laptop = () => (<group><mesh position={[0,0.02,0]}><boxGeometry args={[0.5,0.02,0.35]}/><meshStandardMaterial color="#bdc3c7"/></mesh><mesh position={[0,0.25,-0.17]} rotation={[Math.PI/6,0,0]}><boxGeometry args={[0.5,0.4,0.02]}/><meshStandardMaterial color="#bdc3c7"/></mesh><mesh position={[0,0.25,-0.16]} rotation={[Math.PI/6,0,0]}><planeGeometry args={[0.45,0.35]}/><meshBasicMaterial color="#2c3e50"/></mesh></group>);
+const Laptop = () => {
+  const baseW = 0.5;
+  const baseH = 0.02;
+  const baseD = 0.35;
+  const lidW = 0.5;
+  const lidH = 0.34;
+  const lidD = 0.02;
+  const baseY = 0.02;
+  const hingeY = baseY + baseH / 2;
+  const hingeZ = -baseD / 2 + lidD / 2;
+  const openAngle = Math.PI / 6;
+  const screenTexture = useMemo(() => {
+    const width = 256;
+    const height = 192;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#0b0b0f';
+    ctx.fillRect(0, 0, width, height);
+
+    // Header bar
+    ctx.fillStyle = '#1b1f2a';
+    ctx.fillRect(0, 0, width, 18);
+    ['#ef476f', '#ffd166', '#06d6a0'].forEach((color, i) => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(12 + i * 12, 9, 4, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    const lines = [
+      { y: 36, blocks: [{ w: 80, c: '#ffd166' }, { w: 40, c: '#06d6a0' }] },
+      { y: 54, blocks: [{ w: 120, c: '#9b5de5' }] },
+      { y: 72, blocks: [{ w: 60, c: '#ef476f' }, { w: 70, c: '#ffd166' }] },
+      { y: 90, blocks: [{ w: 140, c: '#06d6a0' }] },
+      { y: 108, blocks: [{ w: 50, c: '#9b5de5' }, { w: 90, c: '#ffd166' }] },
+      { y: 126, blocks: [{ w: 130, c: '#ef476f' }] },
+      { y: 144, blocks: [{ w: 70, c: '#06d6a0' }, { w: 60, c: '#9b5de5' }] }
+    ];
+
+    lines.forEach((line) => {
+      let x = 16;
+      line.blocks.forEach((block, idx) => {
+        ctx.fillStyle = block.c;
+        ctx.fillRect(x, line.y, block.w, 8);
+        x += block.w + (idx === 0 ? 10 : 6);
+      });
+    });
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.needsUpdate = true;
+    return tex;
+  }, []);
+
+  return (
+    <group>
+      {/* Base */}
+      <mesh position={[0, baseY, 0]}>
+        <boxGeometry args={[baseW, baseH, baseD]} />
+        <meshStandardMaterial color="#bdc3c7" />
+      </mesh>
+      {/* Hinge strip for seamless connection */}
+      <mesh position={[0, hingeY, -baseD / 2 + 0.01]}>
+        <boxGeometry args={[baseW * 0.98, 0.01, 0.02]} />
+        <meshStandardMaterial color="#b5bcc2" />
+      </mesh>
+      {/* Lid */}
+      <group position={[0, hingeY, hingeZ]} rotation={[openAngle, 0, 0]}>
+        <mesh position={[0, lidH / 2, 0]}>
+          <boxGeometry args={[lidW, lidH, lidD]} />
+          <meshStandardMaterial color="#bdc3c7" />
+        </mesh>
+        {/* Screen */}
+        <mesh position={[0, lidH / 2, lidD / 2 + 0.001]}>
+          <planeGeometry args={[0.45, 0.3]} />
+          <meshBasicMaterial map={screenTexture} toneMapped={false} />
+        </mesh>
+        {/* Logo dot */}
+        <mesh position={[0, lidH / 2, -lidD / 2 - 0.004]}>
+          <circleGeometry args={[0.035, 32]} />
+          <meshBasicMaterial color="white" side={THREE.DoubleSide} />
+        </mesh>
+      </group>
+    </group>
+  );
+};
+const Suitcase = () => (
+  <group>
+      {/* Body */}
+      <mesh position={[0, 0.31, 0]}>
+          <RoundedBox args={[0.48, 0.62, 0.28]} radius={0.08} smoothness={6}>
+              <meshStandardMaterial color="#ff7aa8" />
+          </RoundedBox>
+      </mesh>
+      {/* Front panel */}
+      <mesh position={[0, 0.31, 0.15]}>
+          <boxGeometry args={[0.36, 0.48, 0.02]} />
+          <meshStandardMaterial color="#ff9ec2" />
+      </mesh>
+      {/* Top carry handle */}
+      <mesh position={[0, 0.64, 0]}>
+          <boxGeometry args={[0.18, 0.04, 0.08]} />
+          <meshStandardMaterial color="#ffd6e6" />
+      </mesh>
+      {/* Telescopic handle */}
+      <mesh position={[0.07, 0.8, -0.02]}>
+          <cylinderGeometry args={[0.01, 0.01, 0.28, 8]} />
+          <meshStandardMaterial color="#cfd6dc" />
+      </mesh>
+      <mesh position={[-0.07, 0.8, -0.02]}>
+          <cylinderGeometry args={[0.01, 0.01, 0.28, 8]} />
+          <meshStandardMaterial color="#cfd6dc" />
+      </mesh>
+      <mesh position={[0, 0.95, -0.02]}>
+          <boxGeometry args={[0.22, 0.03, 0.06]} />
+          <meshStandardMaterial color="#cfd6dc" />
+      </mesh>
+      {/* Wheels */}
+      <mesh position={[0.18, 0.04, 0.12]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.035, 0.035, 0.05, 10]} />
+          <meshStandardMaterial color="#3b3b3b" />
+      </mesh>
+      <mesh position={[-0.18, 0.04, 0.12]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.035, 0.035, 0.05, 10]} />
+          <meshStandardMaterial color="#3b3b3b" />
+      </mesh>
+  </group>
+);
 const FirstAid = () => (<group><mesh position={[0,0.15,0]}><boxGeometry args={[0.4,0.3,0.25]}/><meshStandardMaterial color="white"/></mesh><mesh position={[0,0.15,0.13]}><boxGeometry args={[0.1,0.05,0.01]}/><meshBasicMaterial color="red"/></mesh><mesh position={[0,0.15,0.13]}><boxGeometry args={[0.05,0.1,0.01]}/><meshBasicMaterial color="red"/></mesh></group>);
 const BookStack = () => (<group><mesh position={[0,0.05,0]}><boxGeometry args={[0.3,0.1,0.4]}/><meshStandardMaterial color="#e74c3c"/></mesh><mesh position={[0.05,0.15,0]} rotation={[0,0.2,0]}><boxGeometry args={[0.28,0.1,0.38]}/><meshStandardMaterial color="#3498db"/></mesh><mesh position={[-0.02,0.25,0]} rotation={[0,-0.1,0]}><boxGeometry args={[0.25,0.08,0.35]}/><meshStandardMaterial color="#f1c40f"/></mesh></group>);
+const Tangerine = () => (
+    <group>
+        <mesh position={[0, 0.05, 0]}>
+            <sphereGeometry args={[0.08, 16, 14]} />
+            <meshStandardMaterial color="#ff9f1a" />
+        </mesh>
+        <mesh position={[0, 0.12, 0]}>
+            <cylinderGeometry args={[0.012, 0.012, 0.02, 8]} />
+            <meshStandardMaterial color="#6d4c41" />
+        </mesh>
+        <mesh position={[0.02, 0.13, 0.015]} rotation={[0.2, 0, 0.4]}>
+            <sphereGeometry args={[0.025, 10, 8]} />
+            <meshStandardMaterial color="#7ac943" />
+        </mesh>
+    </group>
+);
 
 // --- Radio with Audio and Animation ---
 const Radio = () => {
@@ -1108,7 +1651,7 @@ const DuckFeet = () => (
 );
 
 const SmallPicnicTable = () => (
-    <group>
+    <group scale={2}>
         {/* Tabletop */}
         <mesh position={[0, 0.24, 0]}>
             <boxGeometry args={[1.0, 0.08, 0.6]} />
@@ -1474,6 +2017,7 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
   const steerVec = useMemo(() => new THREE.Vector3(), []);
   const nextPos = useMemo(() => new THREE.Vector3(), []);
   const tempVec = useMemo(() => new THREE.Vector3(), []);
+  const camVec = useMemo(() => new THREE.Vector3(), []);
   
   // Jump State
   const velocityY = useRef(0);
@@ -1644,6 +2188,14 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
         if(groupRef.current) {
             groupRef.current.rotation.x = 0;
             groupRef.current.rotation.z = 0;
+            camVec.set(
+                state.camera.position.x - groupRef.current.position.x,
+                0,
+                state.camera.position.z - groupRef.current.position.z
+            );
+            if (camVec.lengthSq() > 0.0001) {
+                groupRef.current.rotation.y = Math.atan2(camVec.x, camVec.z);
+            }
             groupRef.current.position.y = groundY;
         }
         if(leftLeg.current) leftLeg.current.rotation.x = -Math.PI / 2;
@@ -1739,13 +2291,53 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
     tex.needsUpdate = true;
     return tex;
   }, []);
+
+  const flowerDressTexture = useMemo(() => {
+    const size = 96;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#fff8ee';
+    ctx.fillRect(0, 0, size, size);
+
+    const drawFlower = (x: number, y: number) => {
+      ctx.fillStyle = '#f5d142';
+      for (let i = 0; i < 6; i++) {
+        const angle = (i * Math.PI * 2) / 6;
+        const px = x + Math.cos(angle) * 9;
+        const py = y + Math.sin(angle) * 9;
+        ctx.beginPath();
+        ctx.arc(px, py, 4.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#f1b90b';
+      ctx.beginPath();
+      ctx.arc(x, y, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+    };
+
+    for (let y = 14; y < size; y += 26) {
+      for (let x = 12; x < size; x += 28) {
+        drawFlower(x + (y % 2 === 0 ? 0 : 6), y);
+      }
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(2.2, 2.2);
+    tex.needsUpdate = true;
+    return tex;
+  }, []);
   
   const getLegColor = () => {
     switch(avatar.outfit) {
         case 'JEANS_BLOUSE': return '#3498db'; 
         case 'YELLOW_SHORTS': return '#333'; 
+        case 'YELLOW_MIDI_DRESS': return skinColor;
+        case 'WHITE_FLOWER_DRESS': return skinColor;
+        case 'BURGUNDY_SWEAT_JEAN_SKIRT': return '#7a1f2b';
         case 'BLACK_CHIC': return '#2c3e50'; 
-        case 'PINK_DRESS': return skinColor;
         case 'BLACK_SUIT': return '#2d3436';
         case 'WHITE_SHIRT_JEANS': return '#3498db';
         case 'NAVY_HOODIE': return '#8d6e63'; 
@@ -1819,8 +2411,8 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
                         <meshToonMaterial color="#5b2bd9" />
                     </mesh>
                     {/* Gradient Skirt (fitted) */}
-                    <mesh position={[0, -0.22, 0]}>
-                        <boxGeometry args={[shoulderWidth + 0.02, 0.16, torsoDepth + 0.04]} />
+                    <mesh position={[0, -0.14, 0]}>
+                        <boxGeometry args={[shoulderWidth + 0.02, 0.24, torsoDepth + 0.04]} />
                         <meshToonMaterial map={purpleGradientSkirtTexture} color="white" />
                     </mesh>
                 </group>
@@ -1865,19 +2457,133 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
                      <mesh position={[0, -0.25, 0]}><boxGeometry args={[shoulderWidth + 0.02, 0.1, torsoDepth + 0.02]} /><meshToonMaterial color="#333" /></mesh>
                 </group>
             );
+        case 'YELLOW_MIDI_DRESS': {
+            const skirtHeight = 0.42;
+            const skirtTopY = -0.04;
+            return (
+                <group position={[0, bodyCenterY, 0]}>
+                    {/* Base body shape */}
+                    <mesh>
+                        <boxGeometry args={[shoulderWidth, torsoHeight, torsoDepth]} />
+                        <meshToonMaterial color={skinColor} />
+                    </mesh>
+                    {/* Dress bodice */}
+                    <mesh position={[0, 0.02, 0.01]}>
+                        <boxGeometry args={[shoulderWidth + 0.04, torsoHeight * 0.9, torsoDepth + 0.06]} />
+                        <meshToonMaterial color="#6fbf4b" />
+                    </mesh>
+                    {/* Thin straps */}
+                    <mesh position={[shoulderWidth / 2 - 0.055, torsoHeight / 2 - 0.035, 0]}>
+                        <boxGeometry args={[0.03, 0.08, torsoDepth + 0.08]} />
+                        <meshToonMaterial color="#6fbf4b" />
+                    </mesh>
+                    <mesh position={[-(shoulderWidth / 2 - 0.055), torsoHeight / 2 - 0.035, 0]}>
+                        <boxGeometry args={[0.03, 0.08, torsoDepth + 0.08]} />
+                        <meshToonMaterial color="#6fbf4b" />
+                    </mesh>
+                    {/* Fitted midi skirt */}
+                    <mesh position={[0, skirtTopY - skirtHeight / 2 + 0.02, 0]}>
+                        <boxGeometry args={[shoulderWidth + 0.02, skirtHeight, torsoDepth + 0.05]} />
+                        <meshToonMaterial color="#5aa63c" />
+                    </mesh>
+                </group>
+            );
+        }
+        case 'WHITE_FLOWER_DRESS': {
+            const skirtHeight = 0.38;
+            const skirtTopY = -0.04;
+            return (
+                <group position={[0, bodyCenterY, 0]}>
+                    {/* Base body shape */}
+                    <mesh>
+                        <boxGeometry args={[shoulderWidth, torsoHeight, torsoDepth]} />
+                        <meshToonMaterial color={skinColor} />
+                    </mesh>
+                    {/* Dress bodice */}
+                    <mesh position={[0, 0.02, 0.01]}>
+                        <boxGeometry args={[shoulderWidth + 0.04, torsoHeight * 0.82, torsoDepth + 0.06]} />
+                        <meshToonMaterial map={flowerDressTexture} color="#fff8ee" />
+                    </mesh>
+                    {/* Thin straps */}
+                    <mesh position={[shoulderWidth / 2 - 0.04, torsoHeight / 2 + 0.06, 0.05]}>
+                        <boxGeometry args={[0.05, 0.12, 0.12]} />
+                        <meshToonMaterial color="#fff3df" />
+                    </mesh>
+                    <mesh position={[-(shoulderWidth / 2 - 0.04), torsoHeight / 2 + 0.06, 0.05]}>
+                        <boxGeometry args={[0.05, 0.12, 0.12]} />
+                        <meshToonMaterial color="#fff3df" />
+                    </mesh>
+                    {/* Soft V neckline */}
+                    <mesh position={[0, torsoHeight * 0.16, torsoDepth / 2 + 0.01]} rotation={[Math.PI, 0, 0]}>
+                        <coneGeometry args={[0.065, 0.14, 4]} />
+                        <meshToonMaterial color={skinColor} />
+                    </mesh>
+                    {/* Knee-length skirt */}
+                    <mesh position={[0, skirtTopY - skirtHeight / 2, 0]}>
+                        <boxGeometry args={[shoulderWidth * 0.9, skirtHeight, torsoDepth + 0.08]} />
+                        <meshToonMaterial map={flowerDressTexture} color="#fff8ee" />
+                    </mesh>
+                </group>
+            );
+        }
+        case 'BURGUNDY_SWEAT_JEAN_SKIRT': {
+            const skirtHeight = 0.26;
+            return (
+                <group position={[0, bodyCenterY, 0]}>
+                    {/* Base body shape */}
+                    <mesh>
+                        <boxGeometry args={[shoulderWidth, torsoHeight, torsoDepth]} />
+                        <meshToonMaterial color={skinColor} />
+                    </mesh>
+                    {/* Burgundy sweatshirt */}
+                    <mesh position={[0, 0, 0]}>
+                        <boxGeometry args={[shoulderWidth + 0.05, torsoHeight * 0.98, torsoDepth + 0.06]} />
+                        <meshToonMaterial color="#7a1f2b" />
+                    </mesh>
+                    {/* Shoulder covers */}
+                    <mesh position={[armX - 0.06, torsoHeight * 0.38, 0.02]}>
+                        <boxGeometry args={[0.12, 0.12, torsoDepth + 0.02]} />
+                        <meshToonMaterial color="#7a1f2b" polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+                    </mesh>
+                    <mesh position={[-(armX - 0.06), torsoHeight * 0.38, 0.02]}>
+                        <boxGeometry args={[0.12, 0.12, torsoDepth + 0.02]} />
+                        <meshToonMaterial color="#7a1f2b" polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+                    </mesh>
+                    {/* Back yoke to fill top view */}
+                    <mesh position={[0, torsoHeight * 0.38, -(torsoDepth / 2) - 0.02]}>
+                        <boxGeometry args={[shoulderWidth + 0.02, 0.16, 0.04]} />
+                        <meshToonMaterial color="#7a1f2b" polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+                    </mesh>
+                    {/* White trim on neckline */}
+                    <mesh position={[0, torsoHeight * 0.18, torsoDepth / 2 + 0.01]}>
+                        <torusGeometry args={[0.11, 0.012, 8, 24, Math.PI]} />
+                        <meshStandardMaterial color="#ffffff" roughness={0.6} />
+                    </mesh>
+                    {/* White star emblem */}
+                    <Text
+                        position={[0, 0.04, torsoDepth / 2 + 0.07]}
+                        fontSize={0.085}
+                        color="#ffffff"
+                        anchorX="center"
+                        anchorY="middle"
+                        renderOrder={2}
+                    >
+                        ★
+                    </Text>
+                    {/* Denim ankle-length skirt */}
+                    <mesh position={[0, -torsoHeight / 2 - skirtHeight / 2 + 0.04, 0]}>
+                        <cylinderGeometry args={[shoulderWidth * 0.5, shoulderWidth * 0.68, skirtHeight, 32]} />
+                        <meshToonMaterial color="#2f4f7b" />
+                    </mesh>
+                </group>
+            );
+        }
         case 'BLACK_CHIC':
              return (
                 <group position={[0, bodyCenterY, 0]}>
                     <mesh><boxGeometry args={[shoulderWidth, torsoHeight, torsoDepth]} /><meshToonMaterial color="#2d3436" /></mesh>
                 </group>
              );
-        case 'PINK_DRESS': 
-            return (
-                <group position={[0, bodyCenterY - 0.05, 0]}>
-                    <mesh position={[0, 0.15, 0]}><boxGeometry args={[0.3, 0.3, 0.2]} /><meshToonMaterial color="#FFB7B2" /></mesh>
-                    <mesh position={[0, -0.2, 0]}><coneGeometry args={[0.28, 0.6, 32]} /><meshToonMaterial color="#FFB7B2" /></mesh>
-                </group>
-            );
         case 'BLACK_SUIT':
             return (
                 <group position={[0, bodyCenterY, 0]}>
@@ -1979,10 +2685,12 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
       switch(avatar.outfit) {
         case 'JEANS_BLOUSE': case 'WHITE_SHIRT_JEANS': return 'white';
         case 'YELLOW_SHORTS': case 'YELLOW_RAINCOAT': return '#f1c40f';
+        case 'YELLOW_MIDI_DRESS': return skinColor;
+        case 'WHITE_FLOWER_DRESS': return skinColor;
+        case 'BURGUNDY_SWEAT_JEAN_SKIRT': return '#7a1f2b';
         case 'BLACK_CHIC': case 'BLACK_SUIT': case 'BLACK_RASHGUARD': return '#2d3436';
         case 'NAVY_HOODIE': return '#1a237e';
         case 'GREY_HOODIE': return '#bdc3c7';
-        case 'PINK_DRESS': return '#FFB7B2';
         default: return skinColor;
       }
   };
@@ -1991,8 +2699,13 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
   const isPonytail = avatar.hairstyle === 'PONYTAIL' || avatar.hairstyle === 'PONYTAIL_PINK';
   const isPonytailPink = avatar.hairstyle === 'PONYTAIL_PINK';
   const isTopBun = avatar.hairstyle === 'BUN_GREEN';
+  const isHippie = avatar.hairstyle === 'HIPPIE';
   const hairColor = isBob ? '#2d3436' : "#5e412f";
   const showRainHood = avatar.outfit === 'YELLOW_RAINCOAT';
+  const isBurgundySweat = avatar.outfit === 'BURGUNDY_SWEAT_JEAN_SKIRT';
+  const armSleeveExtra = isBurgundySweat ? 0.06 : 0;
+  const armHUsed = armH + armSleeveExtra;
+  const handHUsed = isBurgundySweat ? handH * 0.7 : handH;
 
   const initialGroundY = getGroundY ? getGroundY(avatar.position[0], avatar.position[2]) : 0;
 
@@ -2051,12 +2764,18 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
                   <boxGeometry args={[shoulderW, taperH, shoulderD]} />
                   <meshToonMaterial color={getArmColor()} />
               </mesh>
-              <mesh position={[0, -(taperH + armH / 2), 0]}>
-                  <boxGeometry args={[armW, armH, armD]} />
+              <mesh position={[0, -(taperH + armHUsed / 2), 0]}>
+                  <boxGeometry args={[armW, armHUsed, armD]} />
                   <meshToonMaterial color={getArmColor()} />
               </mesh>
-              <mesh position={[0, -(taperH + armH + handH / 2), 0]}>
-                  <boxGeometry args={[handW, handH, handD]} />
+              {avatar.outfit === 'BURGUNDY_SWEAT_JEAN_SKIRT' && (
+                  <mesh position={[0, -(taperH + armHUsed) + 0.02, 0]}>
+                      <boxGeometry args={[armW + 0.02, 0.05, armD + 0.02]} />
+                      <meshStandardMaterial color="#ffffff" roughness={0.6} />
+                  </mesh>
+              )}
+              <mesh position={[0, -(taperH + armHUsed + handHUsed / 2), 0]}>
+                  <boxGeometry args={[handW, handHUsed, handD]} />
                   <meshToonMaterial color={skinColor} />
               </mesh>
               {avatar.accessories.includes('KEYBOARD') && (
@@ -2077,12 +2796,18 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
                   <boxGeometry args={[shoulderW, taperH, shoulderD]} />
                   <meshToonMaterial color={getArmColor()} />
               </mesh>
-              <mesh position={[0, -(taperH + armH / 2), 0]}>
-                  <boxGeometry args={[armW, armH, armD]} />
+              <mesh position={[0, -(taperH + armHUsed / 2), 0]}>
+                  <boxGeometry args={[armW, armHUsed, armD]} />
                   <meshToonMaterial color={getArmColor()} />
               </mesh>
-              <mesh position={[0, -(taperH + armH + handH / 2), 0]}>
-                  <boxGeometry args={[handW, handH, handD]} />
+              {avatar.outfit === 'BURGUNDY_SWEAT_JEAN_SKIRT' && (
+                  <mesh position={[0, -(taperH + armHUsed) + 0.02, 0]}>
+                      <boxGeometry args={[armW + 0.02, 0.05, armD + 0.02]} />
+                      <meshStandardMaterial color="#ffffff" roughness={0.6} />
+                  </mesh>
+              )}
+              <mesh position={[0, -(taperH + armHUsed + handHUsed / 2), 0]}>
+                  <boxGeometry args={[handW, handHUsed, handD]} />
                   <meshToonMaterial color={skinColor} />
               </mesh>
               {avatar.accessories.includes('WATCH') && (
@@ -2177,10 +2902,20 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
                     <sphereGeometry args={[0.235]} />
                     <meshToonMaterial color={hairColor} />
                 </mesh>
+                <group>
+                    <mesh position={[-0.03, 0.08, 0.18]} rotation={[0.1, 0, 0.08]}>
+                        <cylinderGeometry args={[0.012, 0.016, 0.16, 8]} />
+                        <meshToonMaterial color={hairColor} />
+                    </mesh>
+                    <mesh position={[0.03, 0.08, 0.18]} rotation={[0.1, 0, -0.08]}>
+                        <cylinderGeometry args={[0.012, 0.016, 0.16, 8]} />
+                        <meshToonMaterial color={hairColor} />
+                    </mesh>
+                </group>
                 {isPonytail && (
                     <group>
                         <mesh position={[0, 0.1, -0.28]} rotation={[0.4, 0, 0]}>
-                            <coneGeometry args={[0.1, 0.5]} />
+                            <capsuleGeometry args={[0.08, 0.36, 8, 16]} />
                             <meshToonMaterial color={hairColor} />
                         </mesh>
                         {isPonytailPink && (
@@ -2193,14 +2928,42 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
                 )}
                 {isTopBun && (
                     <group>
-                        <mesh position={[0, 0.23, -0.08]}>
+                        <mesh position={[0, 0.29, -0.08]}>
                             <sphereGeometry args={[0.16, 18, 18]} />
                             <meshToonMaterial color={hairColor} />
                         </mesh>
-                        <mesh position={[0, 0.2, -0.08]} rotation={[Math.PI / 2, 0, 0]}>
-                            <torusGeometry args={[0.08, 0.02, 10, 20]} />
-                            <meshStandardMaterial color="#2ecc71" emissive="#56e39f" emissiveIntensity={0.35} />
+                        <mesh position={[0, 0.23, -0.08]} rotation={[Math.PI / 2, 0, 0]}>
+                            <torusGeometry args={[0.075, 0.008, 12, 24]} />
+                            <meshStandardMaterial color="#2ecc71" roughness={0.6} metalness={0} />
                         </mesh>
+                    </group>
+                )}
+                {isHippie && (
+                    <group>
+                        {/* Back volume */}
+                        <mesh position={[0, -0.18, -0.1]}>
+                            <capsuleGeometry args={[0.24, 0.6, 8, 16]} />
+                            <meshToonMaterial color={hairColor} />
+                        </mesh>
+                        {/* Curly strands */}
+                        {[-0.18, 0.18].map((x, idx) => (
+                            <group key={`curl-${idx}`} position={[x, 0.05, 0.12]} rotation={[0, idx === 0 ? -0.25 : 0.25, 0]}>
+                                {[0, 1, 2, 3, 4].map(i => (
+                                    <mesh key={`curl-${idx}-${i}`} position={[Math.sin(i * 0.6) * 0.02, -0.08 * i, 0]}>
+                                        <torusGeometry args={[0.035, 0.012, 8, 16]} />
+                                        <meshToonMaterial color={hairColor} />
+                                    </mesh>
+                                ))}
+                            </group>
+                        ))}
+                        <group position={[0, 0.03, 0.13]}>
+                            {[0, 1, 2].map(i => (
+                                <mesh key={`curl-front-${i}`} position={[0, -0.07 * i, 0]}>
+                                    <torusGeometry args={[0.03, 0.01, 8, 16]} />
+                                    <meshToonMaterial color={hairColor} />
+                                </mesh>
+                            ))}
+                        </group>
                     </group>
                 )}
                 {isLongHair && (
@@ -2230,22 +2993,48 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
                    <mesh position={[0, -0.02, 0.18]} rotation={[0.2, 0, 0]}><boxGeometry args={[0.28, 0.02, 0.18]} /><meshToonMaterial color="#74b9ff" /></mesh>
                  </group>
               )}
-               {(avatar.accessories.includes('HEADSET') || avatar.accessories.includes('HEADSET_WHITE')) && (
+              {(avatar.accessories.includes('HEADSET') || avatar.accessories.includes('HEADSET_WHITE')) && (
                  <group position={[0, -0.02, 0.05]}>
                     <mesh position={[0.25, -0.01, 0.05]}><boxGeometry args={[0.06, 0.18, 0.16]} /><meshStandardMaterial color="white" /></mesh>
                     <mesh position={[-0.25, -0.01, 0.05]}><boxGeometry args={[0.06, 0.18, 0.16]} /><meshStandardMaterial color="white" /></mesh>
                     <mesh position={[0, 0.06, 0.03]} rotation={[0,0,0]}><torusGeometry args={[0.26, 0.03, 8, 16, Math.PI]} /><meshStandardMaterial color="white" /></mesh>
                  </group>
               )}
+              {avatar.accessories.includes('FLOWER_PIN') && (
+                  <group position={[0.18, 0.22, 0.08]} rotation={[0, 0.3, 0]}>
+                      {[0, 1, 2, 3, 4].map((i) => (
+                          <mesh key={`flower-petal-${i}`} position={[Math.cos(i * 1.25) * 0.055, Math.sin(i * 1.25) * 0.035, 0]}>
+                              <sphereGeometry args={[0.028, 12, 12]} />
+                              <meshStandardMaterial color="#ff7aa2" roughness={0.6} />
+                          </mesh>
+                      ))}
+                      <mesh position={[0, 0, 0.01]}>
+                          <sphereGeometry args={[0.02, 12, 12]} />
+                          <meshStandardMaterial color="#ffd24a" roughness={0.4} />
+                      </mesh>
+                  </group>
+              )}
                {avatar.accessories.includes('EARRINGS') && (
                  <group>
-                    <mesh position={[0.22, -0.07, 0.06]}>
-                        <torusGeometry args={[0.03, 0.005, 8, 16]} />
-                        <meshStandardMaterial color="#c9a227" />
+                    <mesh position={[0.225, -0.11, 0.08]}>
+                        <sphereGeometry args={[0.02, 12, 12]} />
+                        <meshStandardMaterial color="#fff1a6" metalness={0.7} roughness={0.25} />
                     </mesh>
-                    <mesh position={[-0.22, -0.07, 0.06]}>
-                        <torusGeometry args={[0.03, 0.005, 8, 16]} />
-                        <meshStandardMaterial color="#c9a227" />
+                    <mesh position={[-0.225, -0.11, 0.08]}>
+                        <sphereGeometry args={[0.02, 12, 12]} />
+                        <meshStandardMaterial color="#fff1a6" metalness={0.7} roughness={0.25} />
+                    </mesh>
+                 </group>
+              )}
+              {avatar.accessories.includes('EARRINGS_HOOP') && (
+                 <group>
+                    <mesh position={[0.225, -0.11, 0.08]} rotation={[0.05, Math.PI / 2, 0]}>
+                        <torusGeometry args={[0.03, 0.006, 10, 20]} />
+                        <meshStandardMaterial color="#fff1a6" metalness={0.65} roughness={0.3} />
+                    </mesh>
+                    <mesh position={[-0.225, -0.11, 0.08]} rotation={[0.05, Math.PI / 2, 0]}>
+                        <torusGeometry args={[0.03, 0.006, 10, 20]} />
+                        <meshStandardMaterial color="#fff1a6" metalness={0.65} roughness={0.3} />
                     </mesh>
                  </group>
               )}
@@ -2269,11 +3058,27 @@ const Player = ({ avatar, playerRef, isPartner = false, moveTarget, setMoveTarge
 
 const TentMesh = ({ tent }: { tent: TentState }) => {
     const { type, pattern, isLit, isDoorOpen, rug, size } = tent;
-    const tentOpacity = 0.75;
+    const tentOpacity = type === 'WINDOW' ? 0.9 : 0.75;
     const sizeScale = size === 'SMALL' ? 0.8 : (size === 'LARGE' ? 1.2 : 1);
     
     // Create texture only when pattern changes
     const texture = useMemo(() => createPatternTexture(pattern), [pattern]);
+    const renderTentPatch = (
+        pos: [number, number, number],
+        colors: [string, string],
+        scale = 1
+    ) => (
+        <mesh position={pos} rotation={[0.08, 0.2, 0]} scale={[scale, scale, scale]}>
+            <boxGeometry args={[0.35, 0.22, 0.03]} />
+            <meshStandardMaterial color={colors[0]} roughness={0.65} />
+            <mesh position={[0, 0, 0.02]}>
+                <boxGeometry args={[0.3, 0.18, 0.01]} />
+                <meshStandardMaterial color={colors[1]} roughness={0.6} />
+            </mesh>
+        </mesh>
+    );
+    const patchGreen: [string, string] = ['#2f6b3c', '#4b8a57'];
+    const patchMagenta: [string, string] = ['#8a2b6c', '#b6458c'];
     
     return (
         <group scale={[sizeScale, sizeScale, sizeScale]}>
@@ -2333,6 +3138,90 @@ const TentMesh = ({ tent }: { tent: TentState }) => {
                             </group>
                         )}
                     </group>
+                    {pattern === 'RED' && (
+                        <>
+                            {renderTentPatch([0.55, 0.55, 1.18], patchGreen)}
+                            {renderTentPatch([-0.4, 0.4, 1.22], patchMagenta, 0.9)}
+                            {renderTentPatch([0.05, 0.2, 1.33], patchGreen, 0.8)}
+                        </>
+                    )}
+                </group>
+            ) : type === 'WINDOW' ? (
+                <group>
+                    {/* Dome Body */}
+                    <mesh position={[0, 0, 0]} castShadow receiveShadow>
+                        <sphereGeometry args={[1.45, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                        <meshStandardMaterial
+                            map={texture}
+                            color={getPatternBaseColor(pattern)}
+                            side={THREE.DoubleSide}
+                            transparent
+                            opacity={tentOpacity}
+                        />
+                    </mesh>
+                    {/* Base Ring */}
+                    <mesh position={[0, -0.03, 0]} castShadow receiveShadow>
+                        <cylinderGeometry args={[1.4, 1.48, 0.12, 32]} />
+                        <meshStandardMaterial color="#e0b673" roughness={0.8} />
+                    </mesh>
+
+                    {/* Door Opening */}
+                    <group position={[0, 0.05, 1.25]}>
+                        {isDoorOpen ? (
+                            <>
+                                <RoundedBox args={[0.76, 0.92, 0.025]} radius={0.28} smoothness={6} position={[0, 0.2, 0]}>
+                                    <meshStandardMaterial color="#2b1d13" roughness={1} metalness={0} />
+                                </RoundedBox>
+                                <RoundedBox args={[0.78, 0.28, 0.04]} radius={0.14} smoothness={6} position={[0, 0.62, 0.03]} rotation={[-1.0, 0, 0]}>
+                                    <meshStandardMaterial color={getPatternBaseColor(pattern)} roughness={0.95} metalness={0} />
+                                </RoundedBox>
+                            </>
+                        ) : (
+                            <RoundedBox args={[0.78, 0.95, 0.04]} radius={0.32} smoothness={6} position={[0, 0.2, 0]}>
+                                <meshStandardMaterial
+                                    map={texture}
+                                    color={pattern === 'KHAKI_OUTDOOR' ? '#9d8b6c' : (pattern === 'YELLOW_STARS' ? '#ffffff' : (pattern === 'ORANGE' ? '#d35400' : '#bdc3c7'))}
+                                    transparent
+                                    opacity={tentOpacity}
+                                />
+                            </RoundedBox>
+                        )}
+                    </group>
+
+                    {/* Windows */}
+                    <group position={[0.8, 0.42, 1.08]}>
+                        <RoundedBox args={[0.6, 0.6, 0.03]} radius={0.22} smoothness={6}>
+                            <meshStandardMaterial map={texture} color={getPatternBaseColor(pattern)} roughness={0.9} metalness={0} />
+                        </RoundedBox>
+                        <RoundedBox args={[0.48, 0.48, 0.02]} radius={0.18} smoothness={6} position={[0, 0, 0.015]}>
+                            <meshStandardMaterial color="#24160f" roughness={1} metalness={0} />
+                        </RoundedBox>
+                    </group>
+                    <group position={[-0.8, 0.42, 1.08]}>
+                        <RoundedBox args={[0.6, 0.6, 0.03]} radius={0.22} smoothness={6}>
+                            <meshStandardMaterial map={texture} color={getPatternBaseColor(pattern)} roughness={0.9} metalness={0} />
+                        </RoundedBox>
+                        <RoundedBox args={[0.48, 0.48, 0.02]} radius={0.18} smoothness={6} position={[0, 0, 0.015]}>
+                            <meshStandardMaterial color="#24160f" roughness={1} metalness={0} />
+                        </RoundedBox>
+                    </group>
+
+                    {/* Ribs */}
+                    <mesh position={[0, 0, 0]} rotation={[0, 0, 0]}>
+                        <torusGeometry args={[1.4, 0.025, 8, 32, Math.PI]} />
+                        <meshStandardMaterial color="#b8762a" />
+                    </mesh>
+                    <mesh position={[0, 0, 0]} rotation={[0, Math.PI/2, 0]}>
+                        <torusGeometry args={[1.4, 0.025, 8, 32, Math.PI]} />
+                        <meshStandardMaterial color="#b8762a" />
+                    </mesh>
+                    {pattern === 'RED' && (
+                        <>
+                            {renderTentPatch([0.85, 0.15, 1.08], patchMagenta)}
+                            {renderTentPatch([-0.85, 0.2, 1.1], patchGreen, 0.9)}
+                            {renderTentPatch([0.0, 0.55, 1.2], patchMagenta, 0.8)}
+                        </>
+                    )}
                 </group>
             ) : (
                 <group>
@@ -2368,16 +3257,23 @@ const TentMesh = ({ tent }: { tent: TentState }) => {
                              </mesh>
                          )}
                     </group>
+                    {pattern === 'RED' && (
+                        <>
+                            {renderTentPatch([-0.7, 0.6, 1.26], patchGreen)}
+                            {renderTentPatch([0.7, 0.45, 1.26], patchMagenta, 0.9)}
+                            {renderTentPatch([0.0, 1.1, 1.26], patchGreen, 0.8)}
+                        </>
+                    )}
                 </group>
             )}
 
             {/* Interior Light */}
             {isLit && (
                 <group>
-                    <pointLight position={[0, 1.25, 0]} intensity={1.6} distance={5} color="#ffe7b3" decay={2} />
+                    <pointLight position={[0, 1.25, 0]} intensity={2.4} distance={6.5} color="#ffe7b3" decay={1.6} />
                     <mesh position={[0, 1.25, 0]}>
                         <sphereGeometry args={[0.08, 16, 16]} />
-                        <meshStandardMaterial color="#fff3c4" emissive="#ffe7b3" emissiveIntensity={1.2} />
+                        <meshStandardMaterial color="#fff3c4" emissive="#ffe7b3" emissiveIntensity={1.6} />
                     </mesh>
                     <mesh position={[0, 1.35, 0]}>
                         <cylinderGeometry args={[0.05, 0.05, 0.08, 12]} />
@@ -2585,7 +3481,8 @@ const ActionMenuButton = ({ label, width, height, onSelect }: { label: string; w
         <group
             onPointerOver={(e) => { e.stopPropagation(); setHovered(true); }}
             onPointerOut={() => setHovered(false)}
-            onPointerDown={(e) => { e.stopPropagation(); onSelect(); }}
+            onPointerDown={(e) => { e.stopPropagation(); }}
+            onPointerUp={(e) => { e.stopPropagation(); onSelect(); }}
         >
             <RoundedBox args={[width, height, 0.02]} radius={0.08} smoothness={4}>
                 <meshBasicMaterial color={hovered ? '#ffeaa7' : '#f3f4f6'} />
@@ -2623,7 +3520,11 @@ const ActionMenu = ({ position, options, yOffset = 0.8, maxScale = 1.2 }: { posi
 
     return (
         <Billboard position={[position[0], position[1] + yOffset, position[2]]}>
-            <group ref={groupRef} onPointerDown={(e) => e.stopPropagation()}>
+            <group
+                ref={groupRef}
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerUp={(e) => e.stopPropagation()}
+            >
                 <RoundedBox args={[width, height, 0.04]} radius={0.12} smoothness={6}>
                     <meshBasicMaterial color="white" transparent opacity={0.95} />
                 </RoundedBox>
@@ -2666,6 +3567,7 @@ const GameCanvas = ({
     const waterTheme = gameState.waterTheme ?? WaterTheme.BLUE;
     const waterTextures = useMemo(() => createWaterTextures(waterTheme), [waterTheme]);
     const sandTextures = useMemo(() => createSandTextures(), []);
+    const pinkSkyTexture = useMemo(() => createPinkSkyTexture(), []);
     const cloudSeeds = useMemo(() => [11, 23, 37, 59], []);
 
     const [bubble, setBubble] = useState<{ id: string; text: string; source: 'auto' | 'click' } | null>(null);
@@ -2694,7 +3596,7 @@ const GameCanvas = ({
     }), []);
     const tableSurfaceDefs = useMemo(() => ({
         camping_table: { width: 1.2, depth: 0.8, topY: 0.54, padding: 0.12 },
-        picnic_table_small: { width: 1.0, depth: 0.6, topY: 0.28, padding: 0.1 }
+        picnic_table_small: { width: 2.0, depth: 1.2, topY: 0.56, padding: 0.2 }
     }), []);
 
     const handleBackgroundClick = (e: any) => {
@@ -2943,13 +3845,22 @@ const GameCanvas = ({
     const handleItemDrag = useCallback((id: string, position: [number, number, number]) => {
         const item = gameState.placedItems.find(i => i.id === id);
         if (!item) return;
-        if (item.category === ItemCategory.FOOD) {
+        if (item.category === ItemCategory.FOOD || TABLETOP_ITEM_IDS.has(item.itemId)) {
             const y = getFoodSnapY(position[0], position[2]);
             onMoveItem(id, [position[0], y, position[2]]);
             return;
         }
         onMoveItem(id, [position[0], 0, position[2]]);
     }, [gameState.placedItems, getFoodSnapY, onMoveItem]);
+
+    const toggleItemState = (id: string) => {
+        setGameState((prev: GameState) => ({
+            ...prev,
+            placedItems: prev.placedItems.map(item => 
+                item.id === id ? { ...item, itemState: { ...item.itemState, isOpen: !item.itemState?.isOpen } } : item
+            )
+        }));
+    };
 
     const openActionMenu = useCallback((payload: { id: string; type: 'sunbed' | 'picnic' | 'tent'; position: [number, number, number]; rotation?: [number, number, number] }) => {
         lastUserInteractRef.current = Date.now();
@@ -2966,8 +3877,12 @@ const GameCanvas = ({
         }
         if (item.itemId === 'picnic_mat' || item.itemId === 'orange_mat') {
             openActionMenu({ id: item.id, type: 'picnic', position: item.position, rotation: item.rotation });
+            return;
         }
-    }, [openActionMenu]);
+        if (item.itemId === 'mailbox') {
+            toggleItemState(item.id);
+        }
+    }, [openActionMenu, toggleItemState]);
 
     const handleTentInteract = useCallback((tent: TentState) => {
         openActionMenu({ id: tent.id, type: 'tent', position: tent.position });
@@ -2985,8 +3900,9 @@ const GameCanvas = ({
                 : prev.tents;
             const nextCameraMode = opts?.openTent ? 'TENT_INTERIOR' : 'ISLAND';
             const tentScale = targetTent ? getTentScale(targetTent.size) : 1;
-            const poseOffset = pose === 'LIE' ? 0.95 : (pose === 'SIT' ? 0.6 : 0.45);
-            const interiorOffset = poseOffset * tentScale;
+            const poseOffset = pose === 'LIE' ? 1.25 : (pose === 'SIT' ? 0.75 : 0.45);
+            const interiorPadding = opts?.openTent ? (pose === 'LIE' ? 0.45 : 0.2) : 0;
+            const interiorOffset = (poseOffset + interiorPadding) * tentScale;
             const targetPosition: [number, number, number] = opts?.openTent
                 ? [targetTent?.position[0] ?? position[0], 0, (targetTent?.position[2] ?? position[2]) - interiorOffset]
                 : [position[0], 0, position[2]];
@@ -3003,15 +3919,6 @@ const GameCanvas = ({
         });
     }, [setGameState, setSelectedItemId]);
 
-    const toggleItemState = (id: string) => {
-        setGameState((prev: GameState) => ({
-            ...prev,
-            placedItems: prev.placedItems.map(item => 
-                item.id === id ? { ...item, itemState: { ...item.itemState, isOpen: !item.itemState?.isOpen } } : item
-            )
-        }));
-    };
-
     const map = useMemo(()=>[
         { name: 'forward', keys: ['ArrowUp', 'KeyW'] },
         { name: 'backward', keys: ['ArrowDown', 'KeyS'] },
@@ -3023,10 +3930,14 @@ const GameCanvas = ({
     const isNight = gameState.time === TimeOfDay.NIGHT;
     const isSunset = gameState.time === TimeOfDay.SUNSET;
     const isDawn = gameState.time === TimeOfDay.DAWN;
+    const isSunrise = gameState.time === TimeOfDay.SUNRISE;
+    const isPink = gameState.time === TimeOfDay.PINK;
     
     const getSkyColor = () => {
         if (isNight) return "#0f172a";
         if (isDawn) return "#70a1ff"; 
+        if (isSunrise) return "#ffb07a";
+        if (isPink) return "#ff7ebd";
         
         if (isSunset) {
              if (gameState.weather === WeatherType.RAINY) return "#d35400"; 
@@ -3035,10 +3946,12 @@ const GameCanvas = ({
 
         if (gameState.weather === WeatherType.RAINY) {
             if (isDawn) return "#6c5ce7";
+            if (isSunrise) return "#b08968";
             return "#64748b"; 
         }
         if (gameState.weather === WeatherType.CLOUDY) {
              if (isDawn) return "#a29bfe";
+             if (isSunrise) return "#d9b08c";
              return "#bdc3c7";
         }
         if (gameState.weather === WeatherType.SNOWY) {
@@ -3056,7 +3969,8 @@ const GameCanvas = ({
             case FloorType.GRASS: 
                 if (isNight) return "#2f3640";
                 if (isDawn) return "#7bed9f"; 
-                if (isSunset) return "#eccc68"; 
+                if (isSunrise) return "#f6e08d";
+                if (isSunset || isPink) return "#eccc68"; 
                 return "#57b864";
             case FloorType.SNOW: return "#f1f2f6";
             case FloorType.SAND: return "#f7d794";
@@ -3096,6 +4010,7 @@ const GameCanvas = ({
             tree_birch: 1.0,
             tree_palm: 0.9,
             tree_lemon: 0.9,
+            tree_baobab: 1.2,
             mini_tree: 0.6,
             ev_car: 1.5,
             sunbed: 0.9,
@@ -3103,7 +4018,7 @@ const GameCanvas = ({
             orange_mat: 0.9,
             camping_chair: 0.7,
             camping_table: 0.9,
-            picnic_table_small: 0.8,
+            picnic_table_small: 1.6,
             campfire: 0.6,
             lantern: 0.4,
             wood_lamp: 0.6,
@@ -3115,12 +4030,17 @@ const GameCanvas = ({
             radio: 0.4,
             game_console: 0.4,
             laptop: 0.4,
+            suitcase: 0.55,
             first_aid: 0.4,
+            tangerine: 0.25,
             camping_box: 0.7,
             snowman: 0.7,
             snow_pile: 0.7,
             duck_float: 0.9,
             duck_feet: 0.6,
+            sandcastle: 0.35,
+            surfboard: 0.9,
+            mailbox: 0.35,
             coffee_cup: 0.3,
             marshmallow: 0.3,
             pot: 0.4,
@@ -3178,10 +4098,18 @@ const GameCanvas = ({
             ambInt = 0.5;
             dirInt = 0.8;
             dirColor = "#ffeaa7"; 
+        } else if (isSunrise) {
+            ambInt = 0.55;
+            dirInt = 0.9;
+            dirColor = "#ffd4a3";
         } else if (isSunset) {
             ambInt = 0.5;
             dirInt = 1.0;
             dirColor = "#ff7675"; 
+        } else if (isPink) {
+            ambInt = 0.55;
+            dirInt = 0.95;
+            dirColor = "#ff8ec7";
         }
 
         if (gameState.weather === WeatherType.RAINY) {
@@ -3202,6 +4130,18 @@ const GameCanvas = ({
     }
 
     const { ambInt, dirInt, dirColor } = getLighting();
+    const getOffsetPosition = useCallback((
+        position: [number, number, number],
+        rotation: [number, number, number] | undefined,
+        offset: [number, number]
+    ): [number, number, number] => {
+        const angle = rotation?.[1] ?? 0;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const dx = offset[0] * cos - offset[1] * sin;
+        const dz = offset[0] * sin + offset[1] * cos;
+        return [position[0] + dx, position[1], position[2] + dz];
+    }, []);
     const actionMenuConfig = useMemo(() => {
         if (!actionMenu) return null;
         if (actionMenu.type === 'sunbed') {
@@ -3213,10 +4153,11 @@ const GameCanvas = ({
             };
         }
         if (actionMenu.type === 'picnic') {
+            const liePosition = getOffsetPosition(actionMenu.position, actionMenu.rotation, [0, -0.4]);
             return {
                 options: [
                     { label: '앉기', onSelect: () => applyActionPose('SIT', actionMenu.position) },
-                    { label: '눕기', onSelect: () => applyActionPose('LIE', actionMenu.position) }
+                    { label: '눕기', onSelect: () => applyActionPose('LIE', liePosition) }
                 ],
                 yOffset: actionMenuOffsets.picnic
             };
@@ -3227,13 +4168,31 @@ const GameCanvas = ({
             ],
             yOffset: actionMenuOffsets.tent
         };
-    }, [actionMenu, actionMenuOffsets, applyActionPose]);
+    }, [actionMenu, actionMenuOffsets, applyActionPose, getOffsetPosition]);
 
     return (
         <div className="w-full h-full relative">
             <KeyboardControls map={map}>
                 <Canvas shadows camera={{ position: [0, 8, 12], fov: 45 }} onPointerMissed={handleBackgroundClick}>
                     <color attach="background" args={[bgColor]} />
+                    {isPink && (
+                        <mesh>
+                            <sphereGeometry args={[120, 32, 16]} />
+                            <meshBasicMaterial map={pinkSkyTexture} side={THREE.BackSide} />
+                        </mesh>
+                    )}
+                    {isSunrise && (
+                        <group position={[0, 2.2, -ISLAND_RADIUS * 2.1]}>
+                            <mesh>
+                                <sphereGeometry args={[6, 32, 32]} />
+                                <meshBasicMaterial color="#ffd27f" />
+                            </mesh>
+                            <mesh>
+                                <sphereGeometry args={[8.5, 32, 32]} />
+                                <meshBasicMaterial color="#ff9e6d" transparent opacity={0.28} />
+                            </mesh>
+                        </group>
+                    )}
                     
                     <ambientLight intensity={ambInt} />
                     <directionalLight 
@@ -3249,7 +4208,7 @@ const GameCanvas = ({
 
                     {isNight && <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />}
                     
-                    {!isNight && gameState.weather !== WeatherType.RAINY && gameState.weather !== WeatherType.SUNNY && (
+                    {!isNight && gameState.weather !== WeatherType.RAINY && gameState.weather !== WeatherType.SUNNY && gameState.weather !== WeatherType.SNOWY && (
                        <>
                         <Cloud opacity={0.4} speed={0.1} bounds={[30, 2, 5]} segments={15} position={[10, 12, -10]} color="white" seed={cloudSeeds[0]} />
                         <Cloud opacity={0.3} speed={0.1} bounds={[30, 2, 5]} segments={15} position={[-10, 10, -5]} color="white" seed={cloudSeeds[1]} />
@@ -3298,6 +4257,7 @@ const GameCanvas = ({
                         displacementScale={waterStyle.displacementScale}
                         opacity={waterStyle.opacity}
                     />
+                    {!isNight && <WaterGlitter />}
 
                     {/* Grid only in edit mode */}
                     {isEditMode && (
@@ -3374,6 +4334,7 @@ const GameCanvas = ({
                             {item.itemId === 'tree_birch' && <Tree type={3} />}
                             {item.itemId === 'tree_palm' && <Tree type={4} />}
                             {item.itemId === 'tree_lemon' && <Tree type={5} />}
+                            {item.itemId === 'tree_baobab' && <Tree type={6} />}
                             {item.itemId === 'mini_tree' && <MiniTree />}
 
                             {/* Interactive EV */}
@@ -3407,6 +4368,9 @@ const GameCanvas = ({
                             {item.itemId === 'duck_float' && <DuckFloat />}
                             {item.itemId === 'duck_feet' && <DuckFeet />}
                             {item.itemId === 'pond' && <Pond />}
+                            {item.itemId === 'sandcastle' && <Sandcastle />}
+                            {item.itemId === 'surfboard' && <Surfboard />}
+                            {item.itemId === 'mailbox' && <Mailbox isOpen={!!item.itemState?.isOpen} />}
                             {item.itemId === 'pot' && <CookingPot />}
                             {item.itemId === 'coffee_pot' && <CoffeePot />}
                             {item.itemId === 'camping_burner' && <CampingBurner />}
@@ -3414,9 +4378,12 @@ const GameCanvas = ({
                             {item.itemId === 'spoon_chopsticks' && <SpoonChopsticksSet />}
                             {item.itemId === 'choco_cookie' && <ChocoCookie />}
                             {item.itemId === 'marshmallow' && <Marshmallow />}
+                            {item.itemId === 'tteokbokki' && <Tteokbokki />}
                             {item.itemId === 'camping_box' && <BoxItem />}
                             {item.itemId === 'laptop' && <Laptop />}
+                            {item.itemId === 'suitcase' && <Suitcase />}
                             {item.itemId === 'first_aid' && <FirstAid />}
+                            {item.itemId === 'tangerine' && <Tangerine />}
                             {item.itemId === 'books' && <BookStack />}
                             {item.itemId === 'game_console' && <GameConsole />}
                         </DraggableObject>
@@ -3426,7 +4393,7 @@ const GameCanvas = ({
                         <Pet 
                             key={pet.id} 
                             pet={pet} 
-                            position={getGroundedPosition(pet.position, PET_GROUND_OFFSET)}
+                            position={getGroundedPosition([pet.position[0], 0, pet.position[2]], PET_GROUND_OFFSET)}
                             isSelected={selectedItemId === pet.id} 
                             onSelect={setSelectedItemId} 
                             onMove={onMovePet} 

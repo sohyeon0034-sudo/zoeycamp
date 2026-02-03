@@ -108,6 +108,13 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   };
 
   const addItem = (item: ItemBlueprint) => {
+    if (item.id === 'mailbox') {
+      const existing = gameState.placedItems.find(existingItem => existingItem.itemId === 'mailbox');
+      if (existing) {
+        setSelectedItemId(existing.id);
+        return;
+      }
+    }
     const x = (Math.random() - 0.5) * 6; // Spread slightly wider
     const z = (Math.random() - 0.5) * 6;
     
@@ -549,8 +556,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
               <div className="bg-indigo-50/80 p-3 rounded-2xl">
                 <span className="text-xs font-bold text-indigo-400 block mb-2">Time</span>
-                <div className="grid grid-cols-4 gap-1">
-                  {[TimeOfDay.DAY, TimeOfDay.SUNSET, TimeOfDay.NIGHT, TimeOfDay.DAWN].map(t => (
+                <div className="grid grid-cols-6 gap-1">
+                  {[TimeOfDay.DAY, TimeOfDay.SUNSET, TimeOfDay.PINK, TimeOfDay.NIGHT, TimeOfDay.DAWN, TimeOfDay.SUNRISE].map(t => (
                     <button
                       key={t}
                       onClick={() => setGameState(prev => ({ ...prev, time: t }))}
@@ -563,9 +570,17 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                     >
                        {t === TimeOfDay.DAY ? <span className="text-lg">☀️</span> :
                         t === TimeOfDay.SUNSET ? <span className="text-lg">🌇</span> :
+                        t === TimeOfDay.PINK ? <span className="text-lg">💗</span> :
                         t === TimeOfDay.DAWN ? <span className="text-lg">🌅</span> :
+                        t === TimeOfDay.SUNRISE ? <span className="text-lg">🌄</span> :
                         <span className="text-lg">🌙</span>}
-                       <span className="text-[9px] font-bold mt-1">{t.slice(0,3)}</span>
+                       <span className="text-[9px] font-bold mt-1">
+                         {t === TimeOfDay.DAY ? 'DAY' :
+                          t === TimeOfDay.SUNSET ? 'SET' :
+                          t === TimeOfDay.PINK ? 'PNK' :
+                          t === TimeOfDay.DAWN ? 'DAW' :
+                          t === TimeOfDay.SUNRISE ? 'RSE' : 'NGT'}
+                       </span>
                     </button>
                   ))}
                 </div>
@@ -635,6 +650,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                  {gameState.tents.map((tent, index) => {
                    const isActive = tent.id === activeTentId;
                    const sizeLabel = tent.size === 'SMALL' ? 'S' : tent.size === 'MEDIUM' ? 'M' : 'L';
+                   const tentIcon = tent.type === 'TRIANGLE' ? '⛺️' : (tent.type === 'SQUARE' ? '🏠' : '🏕️');
                    return (
                      <button
                        key={tent.id}
@@ -644,7 +660,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                        }}
                        className={`min-w-[70px] h-[62px] rounded-xl border-2 flex flex-col items-center justify-center gap-1 transition-all ${isActive ? 'border-orange-400 bg-orange-50 ring-2 ring-orange-200' : 'border-slate-100 bg-white hover:bg-slate-50'}`}
                      >
-                       <span className="text-lg">{tent.type === 'TRIANGLE' ? '⛺️' : '🏠'}</span>
+                       <span className="text-lg">{tentIcon}</span>
                        <span className="text-[9px] font-bold text-slate-500">#{index + 1} · {sizeLabel}</span>
                      </button>
                    );
@@ -676,6 +692,12 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                       className={`flex-1 py-2 rounded-xl flex items-center justify-center gap-2 transition-all ${activeTent.type === 'SQUARE' ? 'bg-orange-100 text-orange-600 border border-orange-200' : 'bg-white text-slate-400'}`}
                    >
                      <span className="text-lg">🏠</span> Cabin
+                   </button>
+                   <button 
+                      onClick={() => updateTent({ type: 'WINDOW' })}
+                      className={`flex-1 py-2 rounded-xl flex items-center justify-center gap-2 transition-all ${activeTent.type === 'WINDOW' ? 'bg-orange-100 text-orange-600 border border-orange-200' : 'bg-white text-slate-400'}`}
+                   >
+                     <span className="text-lg">🏕️</span> Window
                    </button>
                 </div>
              </div>
@@ -767,17 +789,17 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
         {/* Nature Controls */}
         {activeTab === 'NATURE' && (
-          <div className="space-y-4 animate-pop">
+          <div className="space-y-3 animate-pop">
              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Plants & Trees</h3>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-1.5">
               {AVAILABLE_ITEMS.filter(i => i.category === ItemCategory.PLANT).map(item => (
                 <button
                   key={item.id}
                   onClick={() => addItem(item)}
-                  className="aspect-square bg-green-50 rounded-xl flex flex-col items-center justify-center hover:bg-green-100 transition-all border border-green-100 hover:border-green-300 active:scale-95"
+                  className="aspect-square bg-green-50 rounded-lg flex flex-col items-center justify-center gap-0.5 hover:bg-green-100 transition-all border border-green-100 hover:border-green-300 active:scale-95"
                 >
-                  <span className="text-2xl mb-1">{item.icon}</span>
-                  <span className="text-[9px] text-green-700 font-bold truncate w-full text-center px-1">{item.name}</span>
+                  <span className="text-lg">{item.icon}</span>
+                  <span className="text-[8px] text-green-700 font-bold truncate w-full text-center px-1 leading-tight">{item.name}</span>
                 </button>
               ))}
             </div>
@@ -788,20 +810,34 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
         {/* Decoration Controls */}
         {activeTab === 'DECOR' && (
-          <div className="space-y-4 animate-pop">
-             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Equipment</h3>
-            <div className="grid grid-cols-3 gap-2">
-              {AVAILABLE_ITEMS.filter(i => i.category !== ItemCategory.PLANT).map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => addItem(item)}
-                  className="aspect-square bg-slate-50 rounded-xl flex flex-col items-center justify-center hover:bg-green-50 transition-all border border-transparent hover:border-green-200 active:scale-95"
-                >
-                  <span className="text-2xl mb-1">{item.icon}</span>
-                  <span className="text-[9px] text-slate-500 font-bold truncate w-full text-center px-1">{item.name}</span>
-                </button>
-              ))}
-            </div>
+          <div className="space-y-3 animate-pop">
+             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Assets</h3>
+            {[
+              { key: ItemCategory.FURNITURE, label: 'Furniture' },
+              { key: ItemCategory.DECORATION, label: 'Decorations' },
+              { key: ItemCategory.FOOD, label: 'Food' },
+              { key: ItemCategory.VEHICLE, label: 'Vehicles' }
+            ].map(group => {
+              const items = AVAILABLE_ITEMS.filter(i => i.category === group.key);
+              if (items.length === 0) return null;
+              return (
+                <div key={group.key} className="space-y-1.5">
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{group.label}</h4>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {items.map(item => (
+                      <button
+                        key={item.id}
+                        onClick={() => addItem(item)}
+                        className="aspect-square bg-slate-50 rounded-lg flex flex-col items-center justify-center gap-0.5 hover:bg-green-50 transition-all border border-transparent hover:border-green-200 active:scale-95"
+                      >
+                        <span className="text-lg">{item.icon}</span>
+                        <span className="text-[8px] text-slate-500 font-bold truncate w-full text-center px-1 leading-tight">{item.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
             
             <p className="text-[10px] text-slate-400 text-center pt-2">Tip: Click items in world to move/edit</p>
           </div>

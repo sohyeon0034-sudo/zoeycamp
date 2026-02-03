@@ -9,7 +9,9 @@ export enum TimeOfDay {
   DAY = 'DAY',
   NIGHT = 'NIGHT',
   SUNSET = 'SUNSET',
-  DAWN = 'DAWN'
+  DAWN = 'DAWN',
+  SUNRISE = 'SUNRISE',
+  PINK = 'PINK'
 }
 
 export enum FloorType {
@@ -52,9 +54,9 @@ export type TentSize = 'SMALL' | 'MEDIUM' | 'LARGE';
 
 export interface TentState {
   id: string;
-  type: 'TRIANGLE' | 'SQUARE'; 
+  type: 'TRIANGLE' | 'SQUARE' | 'WINDOW'; 
   size: TentSize;
-  pattern: 'ORANGE' | 'DOTS' | 'RAINBOW' | 'HEARTS' | 'YELLOW_STARS' | 'KHAKI_OUTDOOR'; 
+  pattern: 'ORANGE' | 'RED' | 'DOTS' | 'RAINBOW' | 'HEARTS' | 'YELLOW_STARS' | 'KHAKI_OUTDOOR'; 
   rug: 'ETHNIC' | 'BLUE_FUR' | 'SILVER' | 'VINTAGE'; 
   isLit: boolean;
   isDoorOpen: boolean;
@@ -66,9 +68,9 @@ export interface AvatarState {
   gender: 'MALE' | 'FEMALE'; // Added gender
   skinTone: 'TONE1' | 'TONE2' | 'TONE3' | 'TONE4';
   // Female & Male Options Combined for Type Safety
-  outfit: 'PINK_DRESS' | 'JEANS_BLOUSE' | 'YELLOW_SHORTS' | 'BLACK_CHIC' | 'BLACK_SUIT' | 'WHITE_SHIRT_JEANS' | 'NAVY_HOODIE' | 'GREY_HOODIE' | 'YELLOW_RAINCOAT' | 'PINK_BIKINI' | 'SKY_BIKINI_SKIRT' | 'PURPLE_BIKINI_GRADIENT_SKIRT' | 'BLACK_ONEPIECE' | 'BLACK_BOXERS' | 'BLACK_RASHGUARD';
+  outfit: 'YELLOW_MIDI_DRESS' | 'WHITE_FLOWER_DRESS' | 'BURGUNDY_SWEAT_JEAN_SKIRT' | 'JEANS_BLOUSE' | 'YELLOW_SHORTS' | 'BLACK_CHIC' | 'BLACK_SUIT' | 'WHITE_SHIRT_JEANS' | 'NAVY_HOODIE' | 'GREY_HOODIE' | 'YELLOW_RAINCOAT' | 'PINK_BIKINI' | 'SKY_BIKINI_SKIRT' | 'PURPLE_BIKINI_GRADIENT_SKIRT' | 'BLACK_ONEPIECE' | 'BLACK_BOXERS' | 'BLACK_RASHGUARD';
   shoes: 'RED_CANVAS' | 'BLACK_BOOTS' | 'GREEN_SNEAKERS' | 'BLACK_SANDALS' | 'GREY_SNEAKERS' | 'BLACK_SNEAKERS_M' | 'BAREFOOT';
-  hairstyle: 'LONG' | 'SHORT' | 'PONYTAIL' | 'PONYTAIL_PINK' | 'BUN_GREEN';
+  hairstyle: 'LONG' | 'SHORT' | 'PONYTAIL' | 'PONYTAIL_PINK' | 'BUN_GREEN' | 'HIPPIE';
   blush: 'NONE' | 'SOFT_PINK' | 'HOT_PINK' | 'ORANGE';
   accessories: string[]; 
   position: [number, number, number];

@@ -4,14 +4,17 @@ import ControlPanel from './components/ControlPanel';
 import { GameState, WeatherType, TimeOfDay, GameItem, FloorType, WaterTheme } from './types';
 import { Save, Check, Sun, Volume2, VolumeX } from 'lucide-react';
 
+type BgmType = 'WAVE' | 'PEACEFUL' | 'RAIN' | 'JAZZ' | 'NEWAGE';
+
 function App() {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isWeatherPanelOpen, setIsWeatherPanelOpen] = useState(false);
   const [isBgmOn, setIsBgmOn] = useState(false);
-  const [bgmType, setBgmType] = useState<'WAVE' | 'PEACEFUL' | 'RAIN'>('WAVE');
+  const [bgmType, setBgmType] = useState<BgmType>('WAVE');
+  const [isBgmMenuOpen, setIsBgmMenuOpen] = useState(false);
   const bgmRef = useRef<{
-    type: 'WAVE' | 'PEACEFUL' | 'RAIN';
+    type: BgmType;
     ctx: AudioContext;
     gain: GainNode;
     stop: () => void;
@@ -113,13 +116,19 @@ function App() {
           if (parsed.avatar && !parsed.avatar.skinTone) {
             parsed.avatar.skinTone = 'TONE1';
           }
-          if (parsed.avatar && !['SHORT', 'LONG', 'PONYTAIL', 'PONYTAIL_PINK', 'BUN_GREEN'].includes(parsed.avatar.hairstyle)) {
+          if (parsed.avatar && parsed.avatar.outfit === 'PINK_DRESS') {
+            parsed.avatar.outfit = 'JEANS_BLOUSE';
+          }
+          if (parsed.avatar && !['SHORT', 'LONG', 'PONYTAIL', 'PONYTAIL_PINK', 'BUN_GREEN', 'HIPPIE'].includes(parsed.avatar.hairstyle)) {
             parsed.avatar.hairstyle = 'SHORT';
           }
           if (Array.isArray(parsed.partners)) {
             parsed.partners = parsed.partners.map((p: any) => {
               const withSkin = p.skinTone ? p : { ...p, skinTone: 'TONE1' };
-              if (!['SHORT', 'LONG', 'PONYTAIL', 'PONYTAIL_PINK', 'BUN_GREEN'].includes(withSkin.hairstyle)) {
+              if (withSkin.outfit === 'PINK_DRESS') {
+                return { ...withSkin, outfit: 'JEANS_BLOUSE' };
+              }
+              if (!['SHORT', 'LONG', 'PONYTAIL', 'PONYTAIL_PINK', 'BUN_GREEN', 'HIPPIE'].includes(withSkin.hairstyle)) {
                 return { ...withSkin, hairstyle: 'SHORT' };
               }
               return withSkin;
@@ -128,6 +137,18 @@ function App() {
           if (parsed.avatar) {
             parsed.avatar.position = [0, 0, 0];
             parsed.avatar.pose = 'IDLE';
+          }
+          if (Array.isArray(parsed.pets)) {
+            parsed.pets = parsed.pets.map((pet: any) => ({
+              ...pet,
+              position: [pet?.position?.[0] ?? 0, 0, pet?.position?.[2] ?? 0]
+            }));
+          }
+          if (Array.isArray(parsed.placedItems)) {
+            const firstMailboxIndex = parsed.placedItems.findIndex((item: any) => item?.itemId === 'mailbox');
+            if (firstMailboxIndex !== -1) {
+              parsed.placedItems = parsed.placedItems.filter((item: any, idx: number) => item?.itemId !== 'mailbox' || idx === firstMailboxIndex);
+            }
           }
           parsed.cameraMode = 'ISLAND';
           setGameState(parsed);
@@ -270,20 +291,20 @@ function App() {
     if (!AudioCtx) return null;
 
     const ctx = new AudioCtx();
-    const buffer = createNoiseBuffer(ctx, 2, 0.8);
+    const buffer = createNoiseBuffer(ctx, 3, 0.35);
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.loop = true;
 
     const high = ctx.createBiquadFilter();
     high.type = 'highpass';
-    high.frequency.value = 600;
-    high.Q.value = 0.4;
+    high.frequency.value = 320;
+    high.Q.value = 0.2;
 
     const low = ctx.createBiquadFilter();
     low.type = 'lowpass';
-    low.frequency.value = 5200;
-    low.Q.value = 0.2;
+    low.frequency.value = 2800;
+    low.Q.value = 0.3;
 
     const gain = ctx.createGain();
     gain.gain.value = 0;
@@ -295,9 +316,9 @@ function App() {
 
     const lfo = ctx.createOscillator();
     lfo.type = 'sine';
-    lfo.frequency.value = 0.18;
+    lfo.frequency.value = 0.08;
     const lfoGain = ctx.createGain();
-    lfoGain.gain.value = 0.03;
+    lfoGain.gain.value = 0.015;
     lfo.connect(lfoGain);
     lfoGain.connect(gain.gain);
     lfo.start();
@@ -315,18 +336,183 @@ function App() {
     };
   };
 
-  const ensureBgm = (type: 'WAVE' | 'PEACEFUL' | 'RAIN') => {
+  const createJazzBgm = () => {
+    if (typeof window === 'undefined') return null;
+    const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return null;
+
+    const ctx = new AudioCtx();
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 1200;
+    filter.Q.value = 0.6;
+
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const osc3 = ctx.createOscillator();
+    osc1.type = 'triangle';
+    osc2.type = 'sine';
+    osc3.type = 'sine';
+
+    const oscGain1 = ctx.createGain();
+    const oscGain2 = ctx.createGain();
+    const oscGain3 = ctx.createGain();
+    oscGain1.gain.value = 0.035;
+    oscGain2.gain.value = 0.03;
+    oscGain3.gain.value = 0.02;
+
+    osc1.connect(oscGain1).connect(filter);
+    osc2.connect(oscGain2).connect(filter);
+    osc3.connect(oscGain3).connect(filter);
+
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+
+    const chords: Array<[number, number, number]> = [
+      [261.63, 329.63, 493.88], // Cmaj7 (C, E, B)
+      [220.0, 277.18, 392.0],   // Am7  (A, C#, G)
+      [293.66, 349.23, 440.0],  // Dm7  (D, F, A)
+      [196.0, 246.94, 349.23],  // G7   (G, B, F)
+    ];
+
+    const setChord = (index: number) => {
+      const [f1, f2, f3] = chords[index % chords.length];
+      const now = ctx.currentTime;
+      osc1.frequency.setTargetAtTime(f1, now, 0.15);
+      osc2.frequency.setTargetAtTime(f2, now, 0.15);
+      osc3.frequency.setTargetAtTime(f3, now, 0.15);
+    };
+
+    setChord(0);
+    osc1.start();
+    osc2.start();
+    osc3.start();
+
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 0.06;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 0.02;
+    lfo.connect(lfoGain);
+    lfoGain.connect(gain.gain);
+    lfo.start();
+
+    let step = 1;
+    const intervalId = window.setInterval(() => {
+      setChord(step);
+      step += 1;
+    }, 4800);
+
+    return {
+      type: 'JAZZ' as const,
+      ctx,
+      gain,
+      stop: () => {
+        try { osc1.stop(); } catch {}
+        try { osc2.stop(); } catch {}
+        try { osc3.stop(); } catch {}
+        try { lfo.stop(); } catch {}
+        window.clearInterval(intervalId);
+        ctx.close();
+      }
+    };
+  };
+
+  const createNewAgeBgm = () => {
+    if (typeof window === 'undefined') return null;
+    const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return null;
+
+    const ctx = new AudioCtx();
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 1400;
+    filter.Q.value = 0.4;
+
+    const pad = ctx.createOscillator();
+    const bell = ctx.createOscillator();
+    pad.type = 'sine';
+    bell.type = 'triangle';
+
+    const padGain = ctx.createGain();
+    const bellGain = ctx.createGain();
+    padGain.gain.value = 0.05;
+    bellGain.gain.value = 0.02;
+
+    pad.connect(padGain).connect(filter);
+    bell.connect(bellGain).connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+
+    const tones = [220, 246.94, 293.66, 329.63, 392.0];
+    let idx = 0;
+
+    const setTone = () => {
+      const now = ctx.currentTime;
+      const base = tones[idx % tones.length];
+      pad.frequency.setTargetAtTime(base, now, 0.3);
+      bell.frequency.setTargetAtTime(base * 2, now, 0.3);
+      idx += 1;
+    };
+
+    setTone();
+    pad.start();
+    bell.start();
+
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 0.04;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 220;
+    lfo.connect(lfoGain);
+    lfoGain.connect(filter.frequency);
+    lfo.start();
+
+    const intervalId = window.setInterval(setTone, 5200);
+
+    return {
+      type: 'NEWAGE' as const,
+      ctx,
+      gain,
+      stop: () => {
+        try { pad.stop(); } catch {}
+        try { bell.stop(); } catch {}
+        try { lfo.stop(); } catch {}
+        window.clearInterval(intervalId);
+        ctx.close();
+      }
+    };
+  };
+
+  const ensureBgm = (type: BgmType) => {
     if (bgmRef.current?.type === type) return bgmRef.current;
     if (bgmRef.current) {
       bgmRef.current.stop();
       bgmRef.current = null;
     }
-    const next = type === 'WAVE' ? createWaveBgm() : (type === 'PEACEFUL' ? createPeacefulBgm() : createRainBgm());
+    const next = type === 'WAVE'
+      ? createWaveBgm()
+      : (type === 'PEACEFUL'
+        ? createPeacefulBgm()
+        : (type === 'RAIN'
+          ? createRainBgm()
+          : (type === 'JAZZ'
+            ? createJazzBgm()
+            : createNewAgeBgm()
+          )
+        )
+      );
     if (next) bgmRef.current = next;
     return bgmRef.current;
   };
 
-  const setBgmEnabled = (enabled: boolean, type: 'WAVE' | 'PEACEFUL' | 'RAIN') => {
+  const setBgmEnabled = (enabled: boolean, type: BgmType) => {
     if (!enabled) {
       if (bgmRef.current) {
         const node = bgmRef.current;
@@ -348,7 +534,15 @@ function App() {
     const now = node.ctx.currentTime;
     node.gain.gain.cancelScheduledValues(now);
     node.ctx.resume().catch(() => {});
-    const target = type === 'WAVE' ? 0.16 : (type === 'PEACEFUL' ? 0.12 : 0.13);
+    const target = type === 'WAVE'
+      ? 0.16
+      : (type === 'PEACEFUL'
+        ? 0.12
+        : (type === 'RAIN'
+          ? 0.07
+          : (type === 'JAZZ' ? 0.1 : 0.11)
+        )
+      );
     node.gain.gain.setTargetAtTime(target, now, 0.25);
   };
 
@@ -399,7 +593,7 @@ function App() {
   const handleMovePet = (id: string, newPosition: [number, number, number]) => {
     setGameState(prev => ({
       ...prev,
-      pets: prev.pets.map(p => p.id === id ? { ...p, position: newPosition } : p)
+      pets: prev.pets.map(p => p.id === id ? { ...p, position: [newPosition[0], 0, newPosition[2]] } : p)
     }));
   };
 
@@ -465,10 +659,21 @@ function App() {
     setSelectedItemId(null);
     setIsEditMode(false);
     setIsWeatherPanelOpen(prev => !prev);
+    setIsBgmMenuOpen(false);
   };
   
   const handleBgmToggle = () => {
-    setIsBgmOn(prev => !prev);
+    setIsBgmMenuOpen(prev => !prev);
+  };
+  
+  const handleBgmSelect = (type: BgmType | 'OFF') => {
+    if (type === 'OFF') {
+      setIsBgmOn(false);
+    } else {
+      setBgmType(type);
+      setIsBgmOn(true);
+    }
+    setIsBgmMenuOpen(false);
   };
 
   return (
@@ -511,57 +716,88 @@ function App() {
            </div>
 
            <div className="flex items-center gap-2">
-             <button
-               onClick={handleWeatherButton}
-               className={`w-9 h-9 rounded-full border-2 border-white shadow-lg flex items-center justify-center transition-transform ${
-                 isWeatherPanelOpen ? 'bg-orange-100 text-orange-500 scale-105' : 'bg-white/80 text-slate-500 hover:text-orange-500 hover:scale-105'
-               }`}
-               title="Weather"
-             >
-               <Sun size={18} />
-             </button>
-             <button
-               onClick={handleBgmToggle}
-               className={`w-9 h-9 rounded-full border-2 border-white shadow-lg flex items-center justify-center transition-transform ${
-                 isBgmOn ? 'bg-sky-100 text-sky-500 scale-105' : 'bg-white/80 text-slate-500 hover:text-sky-500 hover:scale-105'
-               }`}
-               title="BGM"
-             >
-               {isBgmOn ? <Volume2 size={18} /> : <VolumeX size={18} />}
-             </button>
-             <div className="flex items-center gap-1 bg-white/80 border-2 border-white shadow-lg rounded-full p-1">
+            <button
+              onClick={handleWeatherButton}
+              className={`w-9 h-9 rounded-full border-2 border-white shadow-lg flex items-center justify-center transition-transform ${
+                isWeatherPanelOpen ? 'bg-orange-100 text-orange-500 scale-105' : 'bg-white/80 text-slate-500 hover:text-orange-500 hover:scale-105'
+              }`}
+              title="Weather"
+            >
+              <Sun size={18} />
+            </button>
+             <div className="relative">
                <button
-                 onClick={() => setBgmType('WAVE')}
-                 className={`w-7 h-7 rounded-full text-xs flex items-center justify-center transition-all ${
-                   bgmType === 'WAVE' ? 'bg-sky-100 text-sky-600' : 'text-slate-400 hover:text-sky-500'
+                 onClick={handleBgmToggle}
+                 className={`w-9 h-9 rounded-full border-2 border-white shadow-lg flex items-center justify-center transition-transform ${
+                   isBgmOn ? 'bg-sky-100 text-sky-500 scale-105' : 'bg-white/80 text-slate-500 hover:text-sky-500 hover:scale-105'
                  }`}
-                 title="Wave BGM"
+                 title="BGM"
                >
-                 🌊
+                 {isBgmOn ? <Volume2 size={18} /> : <VolumeX size={18} />}
                </button>
-               <button
-                 onClick={() => setBgmType('PEACEFUL')}
-                 className={`w-7 h-7 rounded-full text-xs flex items-center justify-center transition-all ${
-                   bgmType === 'PEACEFUL' ? 'bg-emerald-100 text-emerald-600' : 'text-slate-400 hover:text-emerald-500'
-                 }`}
-                 title="Peaceful BGM"
-               >
-                 🎵
-               </button>
-               <button
-                 onClick={() => setBgmType('RAIN')}
-                 className={`w-7 h-7 rounded-full text-xs flex items-center justify-center transition-all ${
-                   bgmType === 'RAIN' ? 'bg-blue-100 text-blue-600' : 'text-slate-400 hover:text-blue-500'
-                 }`}
-                 title="Rain BGM"
-               >
-                 🌧️
-               </button>
+               {isBgmMenuOpen && (
+                 <div className="absolute right-0 top-full mt-2 w-40 rounded-2xl border-2 border-white bg-white/95 shadow-xl p-2">
+                   <button
+                     onClick={() => handleBgmSelect('WAVE')}
+                     className={`w-full px-3 py-2 rounded-xl flex items-center justify-between text-xs font-bold transition-all ${
+                       bgmType === 'WAVE' && isBgmOn ? 'bg-sky-100 text-sky-600' : 'text-slate-500 hover:bg-slate-50'
+                     }`}
+                   >
+                     <span>🌊 파도</span>
+                     <span className="text-[10px]">Wave</span>
+                   </button>
+                   <button
+                     onClick={() => handleBgmSelect('PEACEFUL')}
+                     className={`w-full px-3 py-2 rounded-xl flex items-center justify-between text-xs font-bold transition-all ${
+                       bgmType === 'PEACEFUL' && isBgmOn ? 'bg-emerald-100 text-emerald-600' : 'text-slate-500 hover:bg-slate-50'
+                     }`}
+                   >
+                     <span>🎵 잔잔</span>
+                     <span className="text-[10px]">Peaceful</span>
+                   </button>
+                  <button
+                    onClick={() => handleBgmSelect('RAIN')}
+                    className={`w-full px-3 py-2 rounded-xl flex items-center justify-between text-xs font-bold transition-all ${
+                      bgmType === 'RAIN' && isBgmOn ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>🌧️ 비</span>
+                    <span className="text-[10px]">Rain</span>
+                  </button>
+                  <button
+                    onClick={() => handleBgmSelect('JAZZ')}
+                    className={`w-full px-3 py-2 rounded-xl flex items-center justify-between text-xs font-bold transition-all ${
+                      bgmType === 'JAZZ' && isBgmOn ? 'bg-amber-100 text-amber-600' : 'text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>🎷 재즈</span>
+                    <span className="text-[10px]">Jazz</span>
+                  </button>
+                  <button
+                    onClick={() => handleBgmSelect('NEWAGE')}
+                    className={`w-full px-3 py-2 rounded-xl flex items-center justify-between text-xs font-bold transition-all ${
+                      bgmType === 'NEWAGE' && isBgmOn ? 'bg-teal-100 text-teal-600' : 'text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>🍃 산책</span>
+                    <span className="text-[10px]">New Age</span>
+                  </button>
+                  <button
+                    onClick={() => handleBgmSelect('OFF')}
+                    className={`w-full px-3 py-2 rounded-xl flex items-center justify-between text-xs font-bold transition-all ${
+                      !isBgmOn ? 'bg-slate-100 text-slate-600' : 'text-slate-500 hover:bg-slate-50'
+                     }`}
+                   >
+                     <span>🔇 끄기</span>
+                     <span className="text-[10px]">Off</span>
+                   </button>
+                 </div>
+               )}
              </div>
-             <button
-               onClick={handleEditButton}
-               className="bg-white/80 backdrop-blur-md px-3 py-2 rounded-full shadow-lg border-2 border-white text-orange-500 font-bold text-xs hover:scale-105 transition-transform flex items-center gap-1"
-             >
+            <button
+              onClick={handleEditButton}
+              className="bg-white/80 backdrop-blur-md px-3 py-2 rounded-full shadow-lg border-2 border-white text-orange-500 font-bold text-xs hover:scale-105 transition-transform flex items-center gap-1"
+            >
                {isEditMode && <Check size={14} />}
                {isEditMode ? '편집 완료' : 'EDIT'}
              </button>

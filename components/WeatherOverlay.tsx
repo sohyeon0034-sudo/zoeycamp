@@ -35,6 +35,10 @@ const WeatherOverlay: React.FC<WeatherOverlayProps> = ({ weather, time }) => {
     timeOverlayClass = 'bg-slate-900/60 mix-blend-multiply';
   } else if (time === TimeOfDay.SUNSET) {
     timeOverlayClass = 'bg-orange-500/30 mix-blend-overlay';
+  } else if (time === TimeOfDay.SUNRISE) {
+    timeOverlayClass = 'bg-amber-300/25 mix-blend-overlay';
+  } else if (time === TimeOfDay.PINK) {
+    timeOverlayClass = 'bg-pink-300/20 mix-blend-overlay';
   }
 
   // Determine weather tint

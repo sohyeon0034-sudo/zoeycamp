@@ -22,6 +22,7 @@ export const AVAILABLE_ITEMS: ItemBlueprint[] = [
   { id: 'tree_birch', name: 'Birch Tree', icon: '🎋', category: ItemCategory.PLANT },
   { id: 'tree_palm', name: 'Palm Tree', icon: '🌴', category: ItemCategory.PLANT },
   { id: 'tree_lemon', name: 'Lemon Tree', icon: '🍋', category: ItemCategory.PLANT },
+  { id: 'tree_baobab', name: 'Baobab Tree', icon: '🌳', category: ItemCategory.PLANT },
   { id: 'mini_tree', name: 'Mini Tree', icon: '🎄', category: ItemCategory.PLANT },
 
   // Furniture
@@ -29,10 +30,10 @@ export const AVAILABLE_ITEMS: ItemBlueprint[] = [
   { id: 'sunbed', name: 'Sunbed', icon: '🏖️', category: ItemCategory.FURNITURE },
   { id: 'picnic_mat', name: 'Picnic Mat', icon: '🏁', category: ItemCategory.FURNITURE },
   { id: 'orange_mat', name: 'Round Mat', icon: '🟠', category: ItemCategory.FURNITURE },
-  { id: 'camping_chair', name: 'Camping Chair', icon: '🟑', category: ItemCategory.FURNITURE },
+  { id: 'camping_chair', name: 'Camping Chair', icon: '🪑', category: ItemCategory.FURNITURE },
   { id: 'camping_table', name: 'Camping Table', icon: '🪵', category: ItemCategory.FURNITURE },
   { id: 'camping_box', name: 'Cargo Box', icon: '📦', category: ItemCategory.FURNITURE },
-  { id: 'picnic_table_small', name: 'Small Picnic Table', icon: '🧺', category: ItemCategory.FURNITURE },
+  { id: 'picnic_table_small', name: 'Picnic Table', icon: '🧺', category: ItemCategory.FURNITURE },
   
   // Decoration
   { id: 'snowman', name: 'Snowman', icon: '☃️', category: ItemCategory.DECORATION },
@@ -43,18 +44,24 @@ export const AVAILABLE_ITEMS: ItemBlueprint[] = [
   { id: 'flashlight', name: 'Flashlight', icon: '🔦', category: ItemCategory.DECORATION },
   { id: 'campfire', name: 'Campfire', icon: '🔥', category: ItemCategory.DECORATION },
   { id: 'duck_float', name: 'Duck Float', icon: '🛟', category: ItemCategory.DECORATION },
-  { id: 'duck_feet', name: 'Duck Feet', icon: '🪿', category: ItemCategory.DECORATION },
+  { id: 'duck_feet', name: 'Duck Feet', icon: '🦆', category: ItemCategory.DECORATION },
   { id: 'pond', name: 'Small Pond', icon: '💧', category: ItemCategory.DECORATION },
+  { id: 'sandcastle', name: 'Sandcastle', icon: '🏰', category: ItemCategory.DECORATION },
+  { id: 'surfboard', name: 'Surfboard', icon: '🏄', category: ItemCategory.DECORATION },
+  { id: 'mailbox', name: 'Mailbox', icon: '📮', category: ItemCategory.DECORATION },
   { id: 'teddy_bear', name: 'Teddy Bear', icon: '🧸', category: ItemCategory.DECORATION },
   { id: 'books', name: 'Book Stack', icon: '📚', category: ItemCategory.DECORATION },
   { id: 'radio', name: 'Retro Radio', icon: '📻', category: ItemCategory.DECORATION },
   { id: 'game_console', name: 'Game Console', icon: '🎮', category: ItemCategory.DECORATION },
   { id: 'laptop', name: 'Laptop', icon: '💻', category: ItemCategory.DECORATION },
-  { id: 'first_aid', name: 'First Aid Kit', icon: '❤️‍🩹', category: ItemCategory.DECORATION },
+  { id: 'suitcase', name: 'Pink Suitcase', icon: '🧳', category: ItemCategory.DECORATION },
+  { id: 'first_aid', name: 'First Aid Kit', icon: '⛑️', category: ItemCategory.DECORATION },
 
   // Food
   { id: 'coffee_cup', name: 'Takeout Coffee', icon: '🥤', category: ItemCategory.FOOD },
   { id: 'marshmallow', name: 'Marshmallow', icon: '🍡', category: ItemCategory.FOOD },
+  { id: 'tangerine', name: 'Tiny Tangerine', icon: '🍊', category: ItemCategory.FOOD },
+  { id: 'tteokbokki', name: 'Tteokbokki', icon: '🍢', category: ItemCategory.FOOD },
   { id: 'pot', name: 'Cooking Pot', icon: '🍲', category: ItemCategory.FOOD },
   { id: 'coffee_pot', name: 'Coffee Pot', icon: '☕', category: ItemCategory.FOOD },
   { id: 'camping_burner', name: 'Camping Burner', icon: '🍳', category: ItemCategory.FOOD },
@@ -65,7 +72,9 @@ export const AVAILABLE_ITEMS: ItemBlueprint[] = [
 
 // --- Female Avatar Assets ---
 export const AVATAR_OUTFITS = [
-  { id: 'PINK_DRESS', name: 'Pink Dress', icon: '👗' },
+  { id: 'YELLOW_MIDI_DRESS', name: 'Yellow Midi Dress', icon: '💛' },
+  { id: 'WHITE_FLOWER_DRESS', name: 'Yellow Flower Dress', icon: '🌼' },
+  { id: 'BURGUNDY_SWEAT_JEAN_SKIRT', name: 'Burgundy Sweat + Denim Skirt', icon: '👚' },
   { id: 'JEANS_BLOUSE', name: 'Jeans & White', icon: '👖' },
   { id: 'YELLOW_SHORTS', name: 'Yellow & Black', icon: '👕' },
   { id: 'BLACK_CHIC', name: 'All Black', icon: '🖤' },
@@ -90,12 +99,15 @@ export const AVATAR_HAIRSTYLES = [
   { id: 'PONYTAIL', name: 'Ponytail', icon: '👱🏻‍♀️' },
   { id: 'PONYTAIL_PINK', name: 'Ponytail (Pink Tie)', icon: '🎀' },
   { id: 'BUN_GREEN', name: 'Top Bun (Green Tie)', icon: '🟢' },
+  { id: 'HIPPIE', name: 'Hippie Perm', icon: '🌀' },
 ];
 
 export const AVATAR_ACCESSORIES = [
   { id: 'HAT', name: 'Cap', icon: '🧢' },
   { id: 'HEADSET', name: 'Headset', icon: '🎧' },
   { id: 'EARRINGS', name: 'Earrings', icon: '✨' },
+  { id: 'EARRINGS_HOOP', name: 'Hoop Earrings', icon: '⭕' },
+  { id: 'FLOWER_PIN', name: 'Aloha Flower', icon: '🌺' },
   { id: 'FLORAL_CAP', name: 'Floral Swim Cap', icon: '🌸' },
 ];
 
@@ -149,6 +161,7 @@ export const PET_TYPES = [
 
 export const TENT_PATTERNS = [
     { id: 'ORANGE', name: 'Classic Orange', icon: '🟠' },
+    { id: 'RED', name: 'Red', icon: '🔴' },
     { id: 'DOTS', name: 'Black & Dots', icon: '⚫' },
     { id: 'RAINBOW', name: 'Rainbow', icon: '🌈' },
     { id: 'HEARTS', name: 'Pink Hearts', icon: '💖' },
